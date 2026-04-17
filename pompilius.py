@@ -1,5 +1,7 @@
 from gi.repository import Nautilus, GObject, Gtk, Pango, Gio, GLib
-import gi
+import os
+
+EXTENSION_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 class ProfileResponse:
@@ -9,21 +11,51 @@ class ProfileResponse:
 
 class Provider:
     title: str
-    logo: Gtk.Image
+    logo_path: str
 
     def __init__(self, title, logo_path):
         self.title = title
-        self.logo = Gtk.Image.new_from_file(logo_path)
+        self.logo_path = logo_path
+
+    def get_image(self) -> Gtk.Image:
+        full_path = os.path.join(EXTENSION_DIR, self.logo_path)
+        print(full_path)
+
+        if os.path.exists(full_path):
+            return Gtk.Image.new_from_file(full_path)
+
+        return Gtk.Image.new_from_icon_name(self.logo_path)
 
 
 google_provider = Provider(
-    "Google", "/home/gohy/.local/share/nautilus-python/extensions/static/google-drive-logo.png")
+    "Google", "./static/google-drive-logo.png")
 
 yandex_disk_provider = Provider(
-    "Yandex", "/home/gohy/.local/share/nautilus-python/extensions/static/yandex-disk-logo.png")
+    "Yandex", "./static/yandex-disk-logo.png")
 
 next_cloud_provider = Provider(
-    "NextCloud", "/home/gohy/.local/share/nautilus-python/extensions/static/next-cloud-logo.png")
+    "NextCloud", "./static/next-cloud-logo.png")
+
+
+def call_dbus_method(self):
+    bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+
+    try:
+        bus.call_sync(
+            'org.zbus.cloud_api',           # Bus name
+            '/org/zbus/cloud_api',          # Object path
+            'org.zbus.cloud_api',           # Interface name
+            'SayHello',                     # Method
+            GLib.Variant('(s)', ("Egor",)),  # Аргументы (сигнатура s)
+            # Ожидаемый тип ответа (None для любого)
+            None,
+            Gio.DBusCallFlags.NONE,
+            -1,                             # Таймаут по умолчанию
+            None
+        )
+        print("D-Bus метод вызван напрямую")
+    except Exception as e:
+        print(f"Ошибка D-Bus: {e}")
 
 
 class Profile:
@@ -79,12 +111,37 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         print("Пункт меню нажат!")
 
     def on_company_clicked(self, flowbox, child):
-        self.call_dbus_method()
-        # child — это Gtk.FlowBoxChild, внутри которого наш Box
-        # Извлекаем имя компании из данных, которые мы сохранили в ребенке
-        company_name = child.company_id
-        print(f"Выбрана компания: {company_name}")
-        # Здесь запускай логику подключения к конкретному облаку
+        provider_title = child.company_id
+
+        input_dialog = Gtk.Window(
+            title=f"Настройка {provider_title}", modal=True)
+        input_dialog.set_default_size(300, 100)
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        vbox.set_margin_start(15)
+        vbox.set_margin_end(15)
+        vbox.set_margin_top(15)
+        vbox.set_margin_bottom(15)
+
+        label = Gtk.Label(label="Назовите профиль")
+        label.set_xalign(0)
+
+        entry = Gtk.Entry()
+        entry.set_placeholder_text("Введите название профиля...")
+        entry.connect("activate",
+                      self.create_profile, input_dialog, provider_title)
+        provider_title = child.company_id
+
+        vbox.append(label)
+        vbox.append(entry)
+
+        input_dialog.set_child(vbox)
+        input_dialog.present()
+
+    def create_profile(self, entry, input_dialog, provider_title):
+        text = entry.get_text()
+        print(f"Сижу жду ручку с бека: {text} {provider_title}")
+        input_dialog.destroy()
 
     def create_company_widget(self, name, logo):
         """Создает маленькую карточку: Логотип + Название снизу"""
@@ -129,7 +186,7 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         # Наполняем сетку
         for company in companies:
             child_widget = self.create_company_widget(
-                company.title, company.logo)
+                company.title, company.get_image())
             flowbox.append(child_widget)
 
             container = child_widget.get_parent()
@@ -138,32 +195,10 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         # Подключаем событие клика
         flowbox.connect("child-activated", self.on_company_clicked)
         # Если кликнули — закрываем окно (опционально)
-        flowbox.connect("child-activated", lambda fb, ch: dialog.destroy())
+        # flowbox.connect("child-activated", lambda fb, ch: dialog.destroy())
 
         main_box.append(flowbox)
         dialog.show()
-
-    def call_dbus_method(self):
-
-        # Подключение к файловой системе
-        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-
-        try:
-            bus.call_sync(
-                'org.zbus.cloud_api',           # Bus name
-                '/org/zbus/cloud_api',          # Object path
-                'org.zbus.cloud_api',           # Interface name
-                'SayHello',                     # Method
-                GLib.Variant('(s)', ("Egor",)),  # Аргументы (сигнатура s)
-                # Ожидаемый тип ответа (None для любого)
-                None,
-                Gio.DBusCallFlags.NONE,
-                -1,                             # Таймаут по умолчанию
-                None
-            )
-            print("D-Bus метод вызван напрямую")
-        except Exception as e:
-            print(f"Ошибка D-Bus: {e}")
 
     def create_profile_table_row(self, profile: Profile):
         """Создает одну строку таблицы с двумя колонками"""
@@ -183,7 +218,7 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         label_id.set_hexpand(True)
 
         # Провайдеры
-        provider_icon = profile.provider.logo
+        provider_icon = profile.provider.get_image()
         provider_icon.set_pixel_size(24)
         provider_caption = Gtk.Label(label=profile.provider.title)
         provider_caption.add_css_class("caption")
@@ -209,6 +244,8 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         delete_button.set_has_frame(False)
         delete_button.set_child(delete_vbox)
 
+        delete_button.connect("clicked", self.delete_profile, profile.title)
+
         icon = Gtk.Image.new_from_icon_name("network-server-symbolic")
         icon.set_pixel_size(24)
 
@@ -218,6 +255,9 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         row_box.append(delete_button)
 
         return row_box
+
+    def delete_profile(self, button, profile_title):
+        print(f"Жду ручку с бека для удаления: {profile_title}")
 
     def show_profiles(self):
         # profiles =
