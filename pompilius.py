@@ -59,7 +59,7 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
             modal=True,
             message_type=Gtk.MessageType.QUESTION,
             text="Настройка удалённого хранилища",
-            secondary_text="Выберите тип протокола для нового хранилища:"
+            secondary_text="Укажите профиль для загрузки"
         )
         dialog.add_button("Создать профиль", 1)
         dialog.add_button("Использовать существующий профиль", 2)
