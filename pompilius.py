@@ -1,4 +1,4 @@
-from gi.repository import Nautilus, GObject, Gtk, Pango
+from gi.repository import Nautilus, GObject, Gtk, Pango, Gio, GLib
 import gi
 gi.require_version('Gtk', '4.0')
 
@@ -43,6 +43,7 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         print("Пункт меню нажат!")
 
     def on_company_clicked(self, flowbox, child):
+            self.call_dbus_method()
             # child — это Gtk.FlowBoxChild, внутри которого наш Box
             # Извлекаем имя компании из данных, которые мы сохранили в ребенке
             company_name = child.company_id
@@ -56,11 +57,11 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
 
         # Логотип (системная иконка или путь к файлу)
         image = Gtk.Image.new_from_icon_name(icon_name)
-        image.set_pixel_size(48) # Маленький размер логотипа
+        image.set_pixel_size(48) 
         
         # Название (caption)
         label = Gtk.Label(label=name)
-        label.set_ellipsize(Pango.EllipsizeMode.END) # Обрезать, если слишком длинно
+        label.set_ellipsize(Pango.EllipsizeMode.END) 
         label.set_max_width_chars(12)
 
         vbox.append(image)
@@ -100,9 +101,8 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
             child_widget = self.create_company_widget(name, icon)
             flowbox.append(child_widget)
             
-            # # Сохраняем ID в объекте FlowBoxChild, чтобы знать, на что нажали
-            # child_container = flowbox.get_child_at_index(flowbox.get_n_children() - 1)
-            # child_container.company_id = name
+            container = child_widget.get_parent()
+            container.company_id = name
 
         # Подключаем событие клика
         flowbox.connect("child-activated", self.on_company_clicked)
@@ -111,3 +111,24 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
 
         main_box.append(flowbox)
         dialog.show()
+
+    def call_dbus_method(self):
+
+        # Подключение к файловой системе
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        
+        try:
+            bus.call_sync(
+                'org.zbus.cloud_api',           # Bus name
+                '/org/zbus/cloud_api',          # Object path
+                'org.zbus.cloud_api',           # Interface name
+                'SayHello',                     # Method
+                GLib.Variant('(s)', ("Egor",)), # Аргументы (сигнатура s)
+                None,                           # Ожидаемый тип ответа (None для любого)
+                Gio.DBusCallFlags.NONE,
+                -1,                             # Таймаут по умолчанию
+                None
+            )
+            print("D-Bus метод вызван напрямую")
+        except Exception as e:
+            print(f"Ошибка D-Bus: {e}")
