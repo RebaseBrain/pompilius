@@ -13,7 +13,17 @@ class Provider:
 
     def __init__(self, title, logo_path):
         self.title = title
-        self.logo = Gtk.Image.new_from_icon_name(logo_path)
+        self.logo = Gtk.Image.new_from_file(logo_path)
+
+
+google_provider = Provider(
+    "Google", "/home/gohy/.local/share/nautilus-python/extensions/static/google-drive-logo.png")
+
+yandex_disk_provider = Provider(
+    "Yandex", "/home/gohy/.local/share/nautilus-python/extensions/static/yandex-disk-logo.png")
+
+next_cloud_provider = Provider(
+    "NextCloud", "/home/gohy/.local/share/nautilus-python/extensions/static/next-cloud-logo.png")
 
 
 class Profile:
@@ -112,13 +122,9 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         flowbox.set_selection_mode(Gtk.SelectionMode.NONE)
 
         companies = [
-            Provider("Google", "network-server-symbolic"),
-            Provider("Amazon", "network-server-symbolic")]
-        #     ("Dropbox", "folder-remote-symbolic"),
-        #     ("Yandex", "drive-harddisk-symbolic"),
-        #     ("Mail.ru", "mail-send-receive-symbolic"),
-        #     ("Custom", "preferences-system-symbolic")
-        # ]
+            google_provider,
+            yandex_disk_provider,
+            next_cloud_provider]
 
         # Наполняем сетку
         for company in companies:
@@ -233,11 +239,9 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         list_box.set_show_separators(True)  # Рисует линии между строками
 
         data = [
-            Profile("profile1", Provider("Yandex", "network-server-symbolic")),
-            Profile("profile2", Provider(
-                "NextCloud", "mail-send-receive-symbolic")),
-            Profile("profile3", Provider(
-                "Google", "preferences-system-symbolic"))
+            Profile("profile1", yandex_disk_provider),
+            Profile("profile2", next_cloud_provider),
+            Profile("profile3", google_provider)
         ]
 
         for profile in data:
