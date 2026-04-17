@@ -76,11 +76,11 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         title: str
         provider: str
 
-    def get_file_items(self, *args):
+    def get_background_items(self, folder):
         item = Nautilus.MenuItem(
-            name='ExampleMenuProvider::CreateFusion',
+            name='ExampleMenuProvider::CreateFusionBackground',
             label='Добавить удалённое хранилище',
-            tip='Демонстрация работы плагина'
+            tip='Добавить хранилище в текущую папку'
         )
         item.connect('activate', self.menu_activate)
         return [item]
