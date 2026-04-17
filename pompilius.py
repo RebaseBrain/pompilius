@@ -1,11 +1,14 @@
 from gi.repository import Nautilus, GObject, Gtk, Pango, Gio, GLib
 import gi
-gi.require_version('Gtk', '4.0')
 
 class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
     def __init__(self):
         print("askdjaslkjkladjklasjdlksajdlkasjdlkasjlkdj")
         pass
+
+    class ProfileResponse:
+        title: str 
+        provider: str
 
     def get_file_items(self, *args):
         item = Nautilus.MenuItem(
@@ -33,7 +36,7 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
             if response_id == 1:
                 self.create_new_profile()
             elif response_id == 2:
-                print("Выбран протокол WebDAV")
+                self.show_profiles()
             
             d.destroy()
 
@@ -132,3 +135,97 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
             print("D-Bus метод вызван напрямую")
         except Exception as e:
             print(f"Ошибка D-Bus: {e}")
+
+    def create_table_row(self, text_data, company_name, icon_name):
+        """Создает одну строку таблицы с двумя колонками"""
+        # Горизонтальный контейнер для всей строки
+        row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
+        row_box.set_margin_start(10)
+        row_box.set_margin_end(10)
+        row_box.set_margin_top(5)
+        row_box.set_margin_bottom(5)
+
+        label_id = Gtk.Label(label=text_data)
+        label_id.set_xalign(0) 
+        label_id.set_hexpand(True) 
+
+
+        # Orientation.VERTICAL указывает, что поля будут вертикальными
+        company_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        
+        icon = Gtk.Image.new_from_icon_name(icon_name)
+        icon.set_pixel_size(24)
+        
+        caption = Gtk.Label(label=company_name)
+        caption.add_css_class("caption") 
+
+        company_vbox.append(icon)
+        company_vbox.append(caption)
+
+        # Добавляем колонки в строку
+        row_box.append(label_id)
+        row_box.append(company_vbox)
+        
+        return row_box
+
+    def show_profiles(self):
+        # profiles = 
+
+        dialog = Gtk.Window(title="Выберите профиль", modal=True, default_width=400)
+        
+        # Основной контейнер с отступами
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
+        main_box.set_margin_bottom(20)
+        dialog.set_child(main_box)
+
+        header = Gtk.Label(label="Доступные профили")
+        header.add_css_class("title-4") # Используем системный стиль заголовка
+        main_box.append(header)
+
+        list_box = Gtk.ListBox()
+        list_box.set_selection_mode(Gtk.SelectionMode.NONE)
+        list_box.set_show_separators(True) # Рисует линии между строками
+
+        data = [
+        ("https://s3.amazon.com", "Amazon", "network-server-symbolic"),
+        ("https://drive.google.com", "Google", "cloud-symbolic"),
+        ("192.168.1.50/dav", "WebDAV", "folder-remote-symbolic")
+        ]
+
+        for text, company, icon in data:
+            row_content = self.create_table_row(text, company, icon)
+            
+            # В ListBox мы добавляем контент, и он сам оборачивает его в Gtk.ListBoxRow
+            list_box.append(row_content)
+            
+            # Сохраняем данные для клика
+            row_container = row_content.get_parent()
+            row_container.row_id = text
+
+        # Чтобы таблица прокручивалась, если строк много
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_min_content_height(300)
+        scrolled.set_child(list_box)
+
+        dialog.set_child(scrolled)
+        dialog.show()
+
+# def get_profiles():
+#     pass
+#     # bus.call_sync(
+#     #     'org.zbus.cloud_api',           # Bus name
+#     #     '/org/zbus/cloud_api',          # Object path
+#     #     'org.zbus.cloud_api',           # Interface name
+#     #     'SayHello',                     # Method
+#     #     GLib.Variant('(s)', ("Egor",)), # Аргументы (сигнатура s)
+#     #     None,                           # Ожидаемый тип ответа (None для любого)
+#     #     Gio.DBusCallFlags.NONE,
+#     #     -1,                             # Таймаут по умолчанию
+#     #     None
+#     # )
+#     data = [
+#     ("My Yandex", "Amazon",),
+#     ("Ne my Yandex", "Google", ),
+#     ("Google диск", "WebDAV", )
+#     ]
+#
