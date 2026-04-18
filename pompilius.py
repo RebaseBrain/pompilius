@@ -69,11 +69,36 @@ def get_logo_path_from_rclone(rclone_title: str) -> str:
 class Provider:
     title: str
     logo_path: str
+    settings: str
     rclone_title: str
 
     def __init__(self, rclone_title):
         self.title = get_title_from_rclone(rclone_title)
         self.logo_path = get_logo_path_from_rclone(rclone_title)
+
+        settings = []
+
+        try:
+            raw_response = bus.call_sync(
+                'org.zbus.pompiliusd',           # Bus name
+                '/org/zbus/pompiliusd',          # Object path
+                'org.zbus.pompiliusd',           # Interface name
+                'GetProviderOptions',                     # Method
+                # Аргументы (сигнатура s)
+                GLib.Variant('(s)', (rclone_title,)),
+                # Ожидаемый тип ответа (None для любого)
+                None,
+                Gio.DBusCallFlags.NONE,
+                -1,                             # Таймаут по умолчанию
+                None
+            )
+            raw_json = raw_response.unpack()[0]
+            response = json.loads(raw_json)
+            settings_raw = json.loads(response['data'])
+            print(settings_raw)
+            settings = []
+        except Exception as e:
+            print(f"Ошибка D-Bus при создании провайдера: {e}")
 
     def get_image(self) -> Gtk.Image:
         full_path = os.path.join(EXTENSION_DIR, self.logo_path)
@@ -501,10 +526,8 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
                 None
             )
 
-            # Закрываем окно параметров
             current_dialog.destroy()
 
-            # Закрываем список профилей (self.dialog), если он открыт
             if self.dialog:
                 self.dialog.destroy()
                 self.dialog = None
