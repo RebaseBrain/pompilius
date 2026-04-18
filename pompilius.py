@@ -168,7 +168,7 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
                 'org.zbus.pompiliusd',
                 'CreateProfile',
                 GLib.Variant(
-                    '(ss)', (text, provider_title)),
+                    '(ss)', (text, get_rclone_title(provider_title))),
                 None,
                 Gio.DBusCallFlags.NONE,
                 -1,
