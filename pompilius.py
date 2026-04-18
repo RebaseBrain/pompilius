@@ -4,6 +4,7 @@ import json
 from urllib.parse import unquote, urlparse
 
 EXTENSION_DIR = os.path.dirname(os.path.abspath(__file__))
+bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
 
 
 class ProfileResponse:
@@ -53,8 +54,6 @@ class Provider:
 
 
 def call_dbus_method(self):
-    bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-
     try:
         bus.call_sync(
             'org.zbus.cloud_api',           # Bus name
@@ -160,7 +159,6 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
     def create_profile(self, entry, input_dialog, provider_title):
         text = entry.get_text()
 
-        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
         try:
             response_raw = bus.call_sync(
                 'org.zbus.pompiliusd',
@@ -301,7 +299,6 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
 
     def delete_profile(self, button, profile_title):
 
-        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
         try:
             response_raw = bus.call_sync(
                 'org.zbus.pompiliusd',
@@ -329,8 +326,6 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
         main_box.set_margin_bottom(20)
         dialog.set_child(main_box)
-
-        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
 
         profiles = []
         try:
@@ -396,7 +391,6 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         title = getattr(row, 'profile_title', "Неизвестно")
         print(f"Кликнули по строке: {title}")
 
-        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
         try:
             response_raw = bus.call_sync(
                 'org.zbus.pompiliusd',
