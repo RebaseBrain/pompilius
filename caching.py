@@ -66,7 +66,8 @@ class PompiliusCaching(GObject.GObject, Nautilus.MenuProvider):
             absolute_path = unquote(urlparse(uri).path)
             try:
                 relative_path = os.path.relpath(
-                    absolute_path, profile["mount_root"]).replace(mock_profile, "")
+                    absolute_path, profile["mount_root"]).replace(mock_profile, "")[1::]
+                print(f"{mock_profile} {relative_path}")
                 bus.call_sync(
                     'org.zbus.pompiliusd',
                     '/org/zbus/pompiliusd',
