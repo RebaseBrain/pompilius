@@ -31,7 +31,7 @@ def get_rclone_title(title: str) -> str:
 def get_title_from_rclone(rclone_title: str) -> str:
     match rclone_title:
         case "yandex":
-            return "Yandex"
+            return "Yandex Disk"
         case "drive":
             return "Google Drive"
         case "mailru":
@@ -106,55 +106,11 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
     current_dir: str
 
     def __init__(self):
-        print("askdjaslkjkladjklasjdlksajdlkasjdlkasjlkdj")
-        pass
+        GObject.Object.__init__(self)
 
     class ProfileResponse:
         title: str
         provider: str
-
-    def get_file_items(self, window, files):
-        """
-        Этот метод срабатывает ТОЛЬКО при клике на файлы/папки.
-        'files' — это список объектов Nautilus.FileInfo.
-        """
-
-        if not files:
-            return []
-
-        # Создаем пункт меню
-        item = Nautilus.MenuItem(
-            name="Pompilius::CacheFiles",
-            label="Закешировать файл",
-            tip="Файл будет доступен и в оффлайн"
-        )
-
-        # Привязываем действие к нажатию
-        # Передаем список файлов в callback через аргумент
-        item.connect("activate", self.on_menu_item_clicked, files)
-
-        return [item]
-
-    def cache_choosed_files(self, menu, files):
-        mock_profile = "gohy"
-        for file in files:
-            uri = file.get_uri()
-
-            parsed_uri = urlparse(uri)
-            absolute_path = unquote(parsed_uri.path)
-            try:
-                bus.call_sync(
-                    'org.zbus.pompiliusd',
-                    '/org/zbus/pompiliusd',
-                    'org.zbus.pompiliusd',
-                    'CacheDirectory',
-                    GLib.Variant('(ss)', (mock_profile, absolute_path)),
-                    None,
-                    Gio.DBusCallFlags.NONE,
-                    -1,
-                    None)
-            except Exception as e:
-                print(f"Ошибка D-Bus: {e}")
 
     def get_background_items(self, folder):
         self.current_dir = absolute_path = unquote(
@@ -222,6 +178,7 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
 
     def create_profile(self, entry, input_dialog, provider_title):
         text = entry.get_text()
+        print(provider_title)
 
         try:
             response_raw = bus.call_sync(
