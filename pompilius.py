@@ -1,10 +1,21 @@
 from gi.repository import Nautilus, GObject, Gtk, Pango, Gio, GLib
+import tomllib
 import os
 import json
 from urllib.parse import unquote, urlparse
 
 EXTENSION_DIR = os.path.dirname(os.path.abspath(__file__))
 bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+
+
+def get_existing_profiles():
+    config_path = os.path.expanduser("~/.config/pompilius/config.toml")
+    if not os.path.exists(config_path):
+        return {}
+
+    with open(config_path, "rb") as f:
+        data = tomllib.load(f)
+        return data.get("profiles", {})
 
 
 class ProfileResponse:
@@ -129,6 +140,18 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         item.connect('activate', self.menu_activate)
         return [item]
 
+    def show_error_dialog(self, parent, title, message):
+        dialog = Gtk.MessageDialog(
+            transient_for=parent,
+            modal=True,
+            message_type=Gtk.MessageType.ERROR,
+            buttons=Gtk.ButtonsType.OK,
+            text=title,
+            secondary_text=message
+        )
+        dialog.connect("response", lambda d, r: d.destroy())
+        dialog.show()
+
     def menu_activate(self, menu):
         dialog = Gtk.MessageDialog(
             transient_for=None,
@@ -154,7 +177,7 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         dialog.show()
         print("Пункт меню нажат!")
 
-    def on_company_clicked(self, flowbox, child):
+    def on_company_clicked(self, flowbox, child, dialog):
         provider_title = child.company_id
 
         input_dialog = Gtk.Window(
@@ -181,9 +204,21 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
 
         input_dialog.set_child(vbox)
         input_dialog.present()
+        dialog.destroy()
 
     def create_profile(self, entry, input_dialog, provider_title):
         text = entry.get_text()
+        profiles = get_existing_profiles()
+        if text in profiles:
+            self.show_error_dialog(
+                input_dialog,
+                "Профиль уже существует",
+                f"Профиль '{text}' уже используется в: {
+                    profiles[text]}\n. Удалите хранилище по этому пути или выберите другое имя."
+            )
+            return
+
+        print(profiles)
         print(provider_title)
 
         try:
@@ -256,7 +291,7 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
             container.company_id = company.title
 
         # Подключаем событие клика
-        flowbox.connect("child-activated", self.on_company_clicked)
+        flowbox.connect("child-activated", self.on_company_clicked, dialog)
         # Если кликнули — закрываем окно (опционально)
         # flowbox.connect("child-activated", lambda fb, ch: dialog.destroy())
 
