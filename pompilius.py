@@ -1,5 +1,7 @@
 from gi.repository import Nautilus, GObject, Gtk, Pango, Gio, GLib
 import os
+import json
+from urllib.parse import unquote, urlparse
 
 EXTENSION_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -12,10 +14,11 @@ class ProfileResponse:
 class Provider:
     title: str
     logo_path: str
+    rclone_title: str
 
-    def __init__(self, title, logo_path):
-        self.title = title
-        self.logo_path = logo_path
+    def __init__(self, rclone_title):
+        self.title = self.get_title_from_rclone(rclone_title)
+        self.logo_path = self.get_logo_path_from_rclone(rclone_title)
 
     def get_image(self) -> Gtk.Image:
         full_path = os.path.join(EXTENSION_DIR, self.logo_path)
@@ -26,15 +29,24 @@ class Provider:
 
         return Gtk.Image.new_from_icon_name(self.logo_path)
 
+    def get_rclone_title(self, title: str) -> str:
+        match title:
+            case "Yandex":
+                return "yandex"
+        return "unknown"
 
-google_provider = Provider(
-    "Google", "./static/google-drive-logo.png")
+    def get_title_from_rclone(self, rclone_title: str) -> str:
+        match rclone_title:
+            case "yandex":
+                return "Yandex"
+        return "unknown"
 
-yandex_disk_provider = Provider(
-    "Yandex", "./static/yandex-disk-logo.png")
-
-next_cloud_provider = Provider(
-    "NextCloud", "./static/next-cloud-logo.png")
+    def get_logo_path_from_rclone(self, rclone_title: str) -> str:
+        match rclone_title:
+            case "yandex":
+                print("adsdqdsadakjsdbkajd")
+                return "./static/yandex-disk-logo.png"
+        return "unknown"
 
 
 def call_dbus_method(self):
@@ -62,12 +74,14 @@ class Profile:
     title: str
     provider: Provider
 
-    def __init__(self, title, provider):
+    def __init__(self, title, provider: Provider):
         self.title = title
         self.provider = provider
 
 
 class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
+    current_dir: str
+
     def __init__(self):
         print("askdjaslkjkladjklasjdlksajdlkasjdlkasjlkdj")
         pass
@@ -77,6 +91,8 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         provider: str
 
     def get_background_items(self, folder):
+        self.current_dir = absolute_path = unquote(
+            urlparse(folder.get_uri()).path)
         item = Nautilus.MenuItem(
             name='ExampleMenuProvider::CreateFusionBackground',
             label='Добавить удалённое хранилище',
@@ -140,7 +156,25 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
 
     def create_profile(self, entry, input_dialog, provider_title):
         text = entry.get_text()
-        print(f"Сижу жду ручку с бека: {text} {provider_title}")
+
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        try:
+            response_raw = bus.call_sync(
+                'org.zbus.pompiliusd',
+                '/org/zbus/pompiliusd',
+                'org.zbus.pompiliusd',
+                'CreateProfile',
+                GLib.Variant(
+                    '(ss)', (text, provider_title)),
+                None,
+                Gio.DBusCallFlags.NONE,
+                -1,
+                None
+            )
+        except Exception as e:
+            print(f"Ошибка D-Bus: {e}")
+
+        # print(f"Сижу жду ручку с бека: {text} {provider_title}")
         input_dialog.destroy()
 
     def create_company_widget(self, name, logo):
@@ -179,9 +213,10 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         flowbox.set_selection_mode(Gtk.SelectionMode.NONE)
 
         companies = [
-            google_provider,
-            yandex_disk_provider,
-            next_cloud_provider]
+            Provider("drive"),
+            Provider("yandex"),
+            Provider("nextcloud")
+        ]
 
         # Наполняем сетку
         for company in companies:
@@ -244,8 +279,6 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         delete_button.set_has_frame(False)
         delete_button.set_child(delete_vbox)
 
-        delete_button.connect("clicked", self.delete_profile, profile.title)
-
         icon = Gtk.Image.new_from_icon_name("network-server-symbolic")
         icon.set_pixel_size(24)
 
@@ -254,9 +287,33 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         row_box.append(provider_vbox)
         row_box.append(delete_button)
 
-        return row_box
+        row = Gtk.ListBoxRow()
+        row.set_activatable(True)
+        row.set_child(row_box)
+
+        delete_button.connect("clicked", self.delete_profile, profile.title)
+        row.profile_title = profile.title
+
+        return row
 
     def delete_profile(self, button, profile_title):
+
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        try:
+            response_raw = bus.call_sync(
+                'org.zbus.pompiliusd',
+                '/org/zbus/pompiliusd',
+                'org.zbus.pompiliusd',
+                'DeleteProfile',
+                GLib.Variant(
+                    '(s)', (profile_title,)),
+                None,
+                Gio.DBusCallFlags.NONE,
+                -1,
+                None
+            )
+        except Exception as e:
+            print(f"Ошибка D-Bus: {e}")
         print(f"Жду ручку с бека для удаления: {profile_title}")
 
     def show_profiles(self):
@@ -270,6 +327,38 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         main_box.set_margin_bottom(20)
         dialog.set_child(main_box)
 
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+
+        profiles = []
+        try:
+            response_raw = bus.call_sync(
+                'org.zbus.pompiliusd',
+                '/org/zbus/pompiliusd',
+                'org.zbus.pompiliusd',
+                'ListProfiles',
+                None,
+                None,
+                Gio.DBusCallFlags.NONE,
+                -1,
+                None
+            )
+
+            raw_json = response_raw.unpack()[0]
+
+            # 3. Парсим внешний JSON
+            response = json.loads(raw_json)
+
+            # 4. Парсим поле data (оно у тебя тоже строка с JSON-массивом)
+            profiles_raw = json.loads(response['data'])
+
+            profiles = [Profile(name, Provider(provider))
+                        for name, provider in profiles_raw]
+        except Exception as e:
+            print(f"Ошибка D-Bus: {e}")
+
+        print
+
+        data = profiles
         header = Gtk.Label(label="Доступные профили")
         header.add_css_class("title-4")  # Используем системный стиль заголовка
         main_box.append(header)
@@ -277,12 +366,6 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         list_box = Gtk.ListBox()
         list_box.set_selection_mode(Gtk.SelectionMode.NONE)
         list_box.set_show_separators(True)  # Рисует линии между строками
-
-        data = [
-            Profile("profile1", yandex_disk_provider),
-            Profile("profile2", next_cloud_provider),
-            Profile("profile3", google_provider)
-        ]
 
         for profile in data:
             row_content = self.create_profile_table_row(profile)
@@ -294,6 +377,8 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
             row_container = row_content.get_parent()
             row_container.row_id = profile.title
 
+        list_box.connect("row-activated", self.mount_directory)
+
         # Чтобы таблица прокручивалась, если строк много
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_min_content_height(300)
@@ -301,6 +386,31 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
 
         dialog.set_child(scrolled)
         dialog.show()
+
+    def mount_directory(self, list_box, row):
+
+        # Достаем title, который ты сохранил в методе create_profile_table_row
+        title = getattr(row, 'profile_title', "Неизвестно")
+        print(f"Кликнули по строке: {title}")
+
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        try:
+            response_raw = bus.call_sync(
+                'org.zbus.pompiliusd',
+                '/org/zbus/pompiliusd',
+                'org.zbus.pompiliusd',
+                'Mount',
+                GLib.Variant(
+                    '(sss)', (title, 'лютейшийсукамуд', self.current_dir)),
+                None,
+                Gio.DBusCallFlags.NONE,
+                -1,
+                None
+            )
+        except Exception as e:
+            print(f"Ошибка D-Bus: {e}")
+
+        list_box.get_root().destroy()
 
 # def get_profiles():
 #     pass
