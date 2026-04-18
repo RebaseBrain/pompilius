@@ -11,14 +11,36 @@ class ProfileResponse:
     provider: str
 
 
+def get_rclone_title(title: str) -> str:
+    match title:
+        case "Yandex":
+            return "yandex"
+    return "unknown"
+
+
+def get_title_from_rclone(rclone_title: str) -> str:
+    match rclone_title:
+        case "yandex":
+            return "Yandex"
+    return "unknown"
+
+
+def get_logo_path_from_rclone(rclone_title: str) -> str:
+    match rclone_title:
+        case "yandex":
+            print("adsdqdsadakjsdbkajd")
+            return "./static/yandex-disk-logo.png"
+    return "unknown"
+
+
 class Provider:
     title: str
     logo_path: str
     rclone_title: str
 
     def __init__(self, rclone_title):
-        self.title = self.get_title_from_rclone(rclone_title)
-        self.logo_path = self.get_logo_path_from_rclone(rclone_title)
+        self.title = get_title_from_rclone(rclone_title)
+        self.logo_path = get_logo_path_from_rclone(rclone_title)
 
     def get_image(self) -> Gtk.Image:
         full_path = os.path.join(EXTENSION_DIR, self.logo_path)
@@ -28,25 +50,6 @@ class Provider:
             return Gtk.Image.new_from_file(full_path)
 
         return Gtk.Image.new_from_icon_name(self.logo_path)
-
-    def get_rclone_title(self, title: str) -> str:
-        match title:
-            case "Yandex":
-                return "yandex"
-        return "unknown"
-
-    def get_title_from_rclone(self, rclone_title: str) -> str:
-        match rclone_title:
-            case "yandex":
-                return "Yandex"
-        return "unknown"
-
-    def get_logo_path_from_rclone(self, rclone_title: str) -> str:
-        match rclone_title:
-            case "yandex":
-                print("adsdqdsadakjsdbkajd")
-                return "./static/yandex-disk-logo.png"
-        return "unknown"
 
 
 def call_dbus_method(self):
