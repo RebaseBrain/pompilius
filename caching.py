@@ -11,28 +11,47 @@ class PompiliusCaching(GObject.GObject, Nautilus.MenuProvider):
         GObject.Object.__init__(self)
 
     def get_file_items(self, files):
-        """
-        Этот метод срабатывает ТОЛЬКО при клике на файлы/папки.
-        'files' — это список объектов Nautilus.FileInfo.
-        """
-
         if not files:
             return []
 
-        # Создаем пункт меню
-        item = Nautilus.MenuItem(
-            name="Pompilius::CacheFiles",
-            label="Закешировать файл",
-            tip="Файл будет доступен и в оффлайн"
+        # Первая опция: Закешировать
+        item_cache = Nautilus.MenuItem(
+            name="Pompilius::Cache",
+            label="Закешировать",
+            tip="Файл будет доступен офлайн"
         )
+        item_cache.connect("activate", self.cache_choosed_files, files)
 
-        # Привязываем действие к нажатию
-        # Передаем список файлов в callback через аргумент
-        # item.connect("activate", lambda menu, target_files: self.cache_choosed_files(
-        #     menu, target_files), files)
-        item.connect("activate", self.cache_choosed_files, files)
+        # Вторая опция: Удалить из кеша
+        item_remove = Nautilus.MenuItem(
+            name="Pompilius::Remove",
+            label="Удалить из кеша",
+            tip="Удалить локальную копию, оставив файл в облаке"
+        )
+        item_remove.connect("activate", self.delete_from_cache, files)
 
-        return [item]
+        # Просто возвращаем список — Nautilus сам добавит их в меню по порядку
+        return [item_cache, item_remove]
+
+    def delete_from_cache(self, item, files):
+        mock_profile = "gohy"
+        for file in files:
+            mock_path = "./Мишки.jpg"
+
+            try:
+                bus.call_sync(
+                    'org.zbus.pompiliusd',
+                    '/org/zbus/pompiliusd',
+                    'org.zbus.pompiliusd',
+                    'RemoveFromCache',
+                    GLib.Variant('(ss)', (mock_profile, mock_path)),
+                    None,
+                    Gio.DBusCallFlags.NONE,
+                    -1,
+                    None)
+
+            except Exception as e:
+                print(f"Ошибка D-Bus: {e}")
 
     def cache_choosed_files(self, item, files):
         mock_profile = "gohy"
