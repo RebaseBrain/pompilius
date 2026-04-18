@@ -419,7 +419,7 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
                 'org.zbus.pompiliusd',
                 'Mount',
                 GLib.Variant(
-                    '(ss)', (title, f"{self.current_dir}/{title}")),
+                    '(ss)', (title, f"{self.current_dir}")),
                 None,
                 Gio.DBusCallFlags.NONE,
                 -1,
