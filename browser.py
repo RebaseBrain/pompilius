@@ -1,8 +1,10 @@
 import webbrowser
+import os
 from gi.repository import Nautilus, GObject, Gio, GLib
 import json
 from gi.repository import Nautilus, GObject, Gio, GLib, Gdk, Notify
 from urllib.parse import unquote, urlparse
+from pompilius import get_existing_profiles
 
 
 bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
@@ -38,7 +40,27 @@ class PompiliusOpenInBrowser(GObject.GObject, Nautilus.MenuProvider):
         'files' — это список объектов Nautilus.FileInfo.
         """
 
-        if not files:
+        profiles = get_existing_profiles()
+
+        show_menu = False
+        profile = {
+            "title": "",
+            "mount_root": ""
+        }
+        for file in files:
+            uri = file.get_uri()
+            file_path = unquote(urlparse(uri).path)
+            print(profiles)
+            for title, p in profiles.items():
+                if file_path.startswith(p):
+                    profile["title"] = title
+                    profile["mount_root"] = p
+                    show_menu = True
+                    break
+                if show_menu:
+                    break
+
+        if not show_menu:
             return []
 
         # Создаем пункт меню
@@ -48,27 +70,27 @@ class PompiliusOpenInBrowser(GObject.GObject, Nautilus.MenuProvider):
             tip="Можете потом его куда-то скинуть"
         )
 
-        item.connect("activate", self.get_link, files)
+        item.connect("activate", self.get_link, files, profile)
 
         return [item]
 
-    def get_link(self, item, files):
-        mock_profile = "gohy"
-        mock_path = "./Мишки.jpg"
+    def get_link(self, item, files, profile):
+        mock_profile = profile["title"]
         links = []
         for file in files:
             uri = file.get_uri()
 
-            parsed_uri = urlparse(uri)
-            absolute_path = parsed_uri.path
+            absolute_path = unquote(urlparse(uri).path)
             try:
+                relative_path = os.path.relpath(
+                    absolute_path, profile["mount_root"]).replace(mock_profile, "")
                 print(f"{mock_profile} {absolute_path}")
                 result = bus.call_sync(
                     'org.zbus.pompiliusd',
                     '/org/zbus/pompiliusd',
                     'org.zbus.pompiliusd',
                     'Link',
-                    GLib.Variant('(ss)', (mock_profile, mock_path)),
+                    GLib.Variant('(ss)', (mock_profile, relative_path)),
                     None,
                     Gio.DBusCallFlags.NONE,
                     -1,
@@ -79,16 +101,6 @@ class PompiliusOpenInBrowser(GObject.GObject, Nautilus.MenuProvider):
                 parsed_json = json.loads(raw_data)
                 link = json.loads(parsed_json['data'])
                 display = Gdk.Display.get_default()
-                # clipboard = display.get_clipboard()
-                #
-                # # # В GTK4/Gdk мы просто передаем строку в метод set_content
-                # clipboard.set_content(Gdk.ContentProvider.new_for_value(link))
-                # GLib.idle_add(self.show_notification,
-                #               "Pompilius", "Ссылка скопирована!")
-                # GLib.idle_add(self.show_notification,
-                #               "Pompilius", "Ссылка скопирована!")
-                # self.show_notification(
-                #     "Pompilius", "Ссылка скопирована в буфер обмена!")
                 open_link(link)
                 print(link)
 

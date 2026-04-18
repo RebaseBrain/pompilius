@@ -80,7 +80,6 @@ class PompiliusLinks(GObject.GObject, Nautilus.MenuProvider):
             try:
                 relative_path = os.path.relpath(
                     absolute_path, profile["mount_root"]).replace(mock_profile, "")
-                # print(f"{mock_profile} {relative_path}")
                 result = bus.call_sync(
                     'org.zbus.pompiliusd',
                     '/org/zbus/pompiliusd',
