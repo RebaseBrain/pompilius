@@ -107,6 +107,8 @@ def call_dbus_method(self):
 class Profile:
     title: str
     provider: Provider
+    entry_size: int
+    entry_time: int
 
     def __init__(self, title, provider: Provider):
         self.title = title
@@ -199,8 +201,29 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
                       self.create_profile, input_dialog, provider_title)
         provider_title = child.company_id
 
+        # vbox.append(Gtk.Label(label="Максимальный размер кэша (ГБ):", xalign=0))
+        # entry_size = Gtk.Entry(text="10")  # Значение по умолчанию
+        # vbox.append(entry_size)
+
+        # # 3. Поле: Max Time
+        # vbox.append(
+        #     Gtk.Label(label="Максимальное время жизни (часы):", xalign=0))
+        # entry_time = Gtk.Entry(text="24")  # Значение по умолчанию
+        # vbox.append(entry_time)
+
+        btn_create = Gtk.Button(label="Создать и привязать")
+        btn_create.connect(
+            "clicked",
+            self.create_profile,
+            input_dialog,
+            provider_title,
+            # entry_size,
+            # entry_time
+        )
+
         vbox.append(label)
         vbox.append(entry)
+        # vbox.append(btn_create)
 
         input_dialog.set_child(vbox)
         input_dialog.present()
@@ -223,13 +246,14 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
 
         try:
             mock_additional_params = {}
+            params_json_string = json.dumps(mock_additional_params)
             response_raw = bus.call_sync(
                 'org.zbus.pompiliusd',
                 '/org/zbus/pompiliusd',
                 'org.zbus.pompiliusd',
                 'CreateProfile',
                 GLib.Variant(
-                    '(ssa{ss})', (text, get_rclone_title(provider_title), mock_additional_params)),
+                    '(sss)', (text, get_rclone_title(provider_title), params_json_string)),
                 None,
                 Gio.DBusCallFlags.NONE,
                 -1,
@@ -407,28 +431,87 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         self.dialog.show()
 
     def mount_directory(self, list_box, row):
-
-        # Достаем title, который ты сохранил в методе create_profile_table_row
+        # 1. Получаем имя профиля из выбранной строки
         title = getattr(row, 'profile_title', "Неизвестно")
-        print(f"Кликнули по строке: {title}")
+
+        # 2. Создаем окно для уточнения параметров перед монтированием
+        mount_params_dialog = Gtk.Window(
+            title=f"Параметры монтирования: {title}",
+            modal=True,
+            default_width=300
+        )
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        vbox.set_margin_end(15)
+        mount_params_dialog.set_child(vbox)
+
+        # Поле ввода Max Size
+        vbox.append(Gtk.Label(label="Максимальный размер кэша (ГБ):", xalign=0))
+        entry_size = Gtk.Entry()
+        entry_size.set_text("10")  # Значение по умолчанию
+        vbox.append(entry_size)
+
+        # Поле ввода Max Time
+        vbox.append(Gtk.Label(label="Время жизни кэша (часы):", xalign=0))
+        entry_time = Gtk.Entry()
+        entry_time.set_text("24")  # Значение по умолчанию
+        vbox.append(entry_time)
+
+        # Кнопка подтверждения
+        btn_confirm = Gtk.Button(label="Подключить")
+        btn_confirm.add_css_class("suggested-action")
+
+        # Передаем всё необходимое в фпередаю название профиля, открывалось окошко,ункцию исполнения
+        btn_confirm.connect(
+            "clicked",
+            self.execute_mount,
+            title,
+            entry_size,
+            entry_time,
+            mount_params_dialog
+        )
+
+        vbox.append(btn_confirm)
+        mount_params_dialog.present()
+
+    def execute_mount(self, button, title, entry_size, entry_time, current_dialog):
+        # 3. Собираем данные из полей
+        max_size = entry_size.get_text().strip()
+        max_time = entry_time.get_text().strip()
+
+        print(f"Выполняю монтирование: {title} в {
+              self.current_dir} ({max_size}, {max_time})")
 
         try:
-            response_raw = bus.call_sync(
+            # 4. Реальный вызов D-Bus
+            bus.call_sync(
                 'org.zbus.pompiliusd',
                 '/org/zbus/pompiliusd',
                 'org.zbus.pompiliusd',
                 'Mount',
-                GLib.Variant(
-                    '(ss)', (title, f"{self.current_dir}")),
+                GLib.Variant('(ssss)', (
+                    title,
+                    self.current_dir,
+                    max_size,
+                    max_time
+                )),
                 None,
                 Gio.DBusCallFlags.NONE,
                 -1,
                 None
             )
-        except Exception as e:
-            print(f"Ошибка D-Bus: {e}")
 
-        list_box.get_root().destroy()
+            # Закрываем окно параметров
+            current_dialog.destroy()
+
+            # Закрываем список профилей (self.dialog), если он открыт
+            if self.dialog:
+                self.dialog.destroy()
+                self.dialog = None
+
+        except Exception as e:
+            self.show_error_dialog(
+                current_dialog, "Ошибка монтирования", str(e))
 
     def load_profiles(self):
         """Очищает список и загружает данные из D-Bus заново"""
