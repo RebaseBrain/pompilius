@@ -13,52 +13,60 @@ class PompiliusCaching(GObject.GObject, Nautilus.MenuProvider):
         GObject.Object.__init__(self)
 
     def get_file_items(self, files):
-
         profiles = get_existing_profiles()
 
         show_menu = False
-        profile = {
+        all_are_directories = True
+
+        current_profile = {
             "title": "",
             "mount_root": ""
         }
+
         for file in files:
+            if not file.is_directory():
+                all_are_directories = False
+
             uri = file.get_uri()
             file_path = unquote(urlparse(uri).path)
-            print(profiles)
+
             for title, p in profiles.items():
                 if file_path.startswith(p):
-                    profile["title"] = title
-                    profile["mount_root"] = p
+                    current_profile["title"] = title
+                    current_profile["mount_root"] = p
                     show_menu = True
                     break
-                if show_menu:
-                    break
+
+            if show_menu:
+                break
 
         if not show_menu:
             return []
 
-        # Первая опция: Закешировать
-        item_cache = Nautilus.MenuItem(
-            name="Pompilius::Cache",
-            label="Закешировать",
-            tip="Файл будет доступен офлайн"
-        )
-        item_cache.connect("activate", self.cache_choosed_files, files)
+        menu_items = []
 
-        # Вторая опция: Удалить из кеша
+        if all_are_directories:
+            item_cache = Nautilus.MenuItem(
+                name="Pompilius::Cache",
+                label="Закешировать директорию",
+                tip="Директория будет доступна офлайн"
+            )
+            item_cache.connect(
+                "activate", self.cache_choosed_directory, files)
+            menu_items.append(item_cache)
+
         item_remove = Nautilus.MenuItem(
             name="Pompilius::Remove",
             label="Удалить из кеша",
             tip="Удалить локальную копию, оставив файл в облаке"
         )
-        item_remove.connect("activate", self.delete_from_cache, files, profile)
+        item_remove.connect(
+            "activate", self.delete_from_cache, files, current_profile)
+        menu_items.append(item_remove)
 
-        # Просто возвращаем список — Nautilus сам добавит их в меню по порядку
-        return [item_cache, item_remove]
+        return menu_items
 
     def delete_from_cache(self, item, files, profile):
-        profiles = get_existing_profiles()
-
         mock_profile = profile["title"]
 
         for file in files:
@@ -82,23 +90,35 @@ class PompiliusCaching(GObject.GObject, Nautilus.MenuProvider):
             except Exception as e:
                 print(f"Ошибка D-Bus: {e}")
 
-    def cache_choosed_files(self, item, files):
-        mock_profile = "gohy"
-        for file in files:
-            uri = file.get_uri()
+    def cache_choosed_directory(self, item, directories):
+        # Проходим циклом по всем выделенным объектам
+        for file_info in directories:
+            # 1. Получаем объект Gio.File
+            location = file_info.get_location()
+            if not location:
+                continue
 
-            parsed_uri = urlparse(uri)
-            absolute_path = unquote(parsed_uri.path)
+            # 2. Получаем абсолютный путь в виде строки
+            abs_path = location.get_path()
+
+            if not abs_path:
+                continue
+
+            print(f"Запуск кеширования для: {abs_path}")
+
             try:
+                # 3. Вызов D-Bus метода CacheDirectory
+                # Сигнатура 's' — одна строка (путь)
                 bus.call_sync(
                     'org.zbus.pompiliusd',
                     '/org/zbus/pompiliusd',
                     'org.zbus.pompiliusd',
                     'CacheDirectory',
-                    GLib.Variant('(ss)', (mock_profile, absolute_path)),
+                    GLib.Variant('(s)', (abs_path,)),
                     None,
                     Gio.DBusCallFlags.NONE,
                     -1,
-                    None)
+                    None
+                )
             except Exception as e:
-                print(f"Ошибка D-Bus: {e}")
+                print(f"Ошибка D-Bus при кешировании {abs_path}: {e}")
