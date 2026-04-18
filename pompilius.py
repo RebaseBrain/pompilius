@@ -35,6 +35,8 @@ def get_rclone_title(title: str) -> str:
             return "iclouddrive"
         case "Mega":
             return "mega"
+        case "Mail.ru Cloud":
+            return "mailru"
 
     return "unknown"
 
@@ -51,6 +53,8 @@ def get_title_from_rclone(rclone_title: str) -> str:
             return "iCloud Drive"
         case "mega":
             return "Mega"
+        case "mailru":
+            return "Mail.ru Cloud"
 
     return "unknown"
 
@@ -63,6 +67,8 @@ def get_logo_path_from_rclone(rclone_title: str) -> str:
             return "./static/google-drive-logo.png"
         case "iclouddrive":
             return "./static/i-cloud-logo.svg"
+        case "mailru":
+            return "./static/mail-ru-cloud.png"
     return "unknown"
 
 
@@ -339,7 +345,8 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         companies = [
             Provider("drive"),
             Provider("yandex"),
-            Provider("iclouddrive")
+            Provider("iclouddrive"),
+            Provider("mailru")
         ]
 
         # Наполняем сетку
