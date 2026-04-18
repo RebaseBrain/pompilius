@@ -75,8 +75,7 @@ class Provider:
     def __init__(self, rclone_title):
         self.title = get_title_from_rclone(rclone_title)
         self.logo_path = get_logo_path_from_rclone(rclone_title)
-
-        settings = []
+        self.settings_list = []
 
         try:
             raw_response = bus.call_sync(
@@ -92,11 +91,13 @@ class Provider:
                 -1,                             # Таймаут по умолчанию
                 None
             )
+
             raw_json = raw_response.unpack()[0]
             response = json.loads(raw_json)
-            settings_raw = json.loads(response['data'])
-            print(settings_raw)
-            settings = []
+
+            temp_list = json.loads(response['data'])
+
+            self.settings_list = {opt['Name']: opt for opt in temp_list}
         except Exception as e:
             print(f"Ошибка D-Bus при создании провайдера: {e}")
 
@@ -205,89 +206,99 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         print("Пункт меню нажат!")
 
     def on_company_clicked(self, flowbox, child, dialog):
-        provider_title = child.company_id
+        # child.company_id содержит читаемое название, нам нужно техническое
+        # В create_new_profile мы задали container.company_id = company.title (читаемое)
+        # Нам нужен объект Provider, который мы создали в списке companies
+        rclone_name = get_rclone_title(child.company_id)
+        provider = Provider(rclone_name)
 
         input_dialog = Gtk.Window(
-            title=f"Настройка {provider_title}", modal=True)
-        input_dialog.set_default_size(300, 100)
+            title=f"Настройка {provider.title}", modal=True)
+        input_dialog.set_default_size(350, -1)
 
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        vbox.set_margin_start(15)
         vbox.set_margin_end(15)
-        vbox.set_margin_top(15)
-        vbox.set_margin_bottom(15)
 
-        label = Gtk.Label(label="Назовите профиль")
-        label.set_xalign(0)
+        vbox.append(Gtk.Label(label="Название профиля", xalign=0))
+        entry_profile_name = Gtk.Entry()
+        vbox.append(entry_profile_name)
 
-        entry = Gtk.Entry()
-        entry.set_placeholder_text("Введите название профиля...")
-        entry.connect("activate",
-                      self.create_profile, input_dialog, provider_title)
-        provider_title = child.company_id
+        entries_map = {}
 
-        # vbox.append(Gtk.Label(label="Максимальный размер кэша (ГБ):", xalign=0))
-        # entry_size = Gtk.Entry(text="10")  # Значение по умолчанию
-        # vbox.append(entry_size)
+        for info in provider.settings_list.values():
+            name = info.get('Name')
 
-        # # 3. Поле: Max Time
-        # vbox.append(
-        #     Gtk.Label(label="Максимальное время жизни (часы):", xalign=0))
-        # entry_time = Gtk.Entry(text="24")  # Значение по умолчанию
-        # vbox.append(entry_time)
+            label = Gtk.Label(label=name, xalign=0)
+            vbox.append(label)
+
+            entry = Gtk.Entry()
+
+            clean_name = name.lower()
+            if "password" in clean_name or "secret" in clean_name:
+                entry.set_visibility(False)
+
+            vbox.append(entry)
+
+            entries_map[name] = entry
 
         btn_create = Gtk.Button(label="Создать и привязать")
+        btn_create.add_css_class("suggested-action")
+
         btn_create.connect(
             "clicked",
             self.create_profile,
             input_dialog,
-            provider_title,
-            # entry_size,
-            # entry_time
+            rclone_name,
+            entry_profile_name,
+            entries_map,
+            provider.settings_list
         )
 
-        vbox.append(label)
-        vbox.append(entry)
-        # vbox.append(btn_create)
-
+        vbox.append(btn_create)
         input_dialog.set_child(vbox)
         input_dialog.present()
         dialog.destroy()
 
-    def create_profile(self, entry, input_dialog, provider_title):
-        text = entry.get_text()
+    def create_profile(self, button, input_dialog, rclone_name, entry_profile_name, entries_map, settings_map):
+        # 1. Достаем имя профиля
+        profile_title = entry_profile_name.get_text().strip()
+
+        # 2. Проверка на существование (твой код)
         profiles = get_existing_profiles()
-        if text in profiles:
+        if profile_title in profiles:
             self.show_error_dialog(
                 input_dialog,
                 "Профиль уже существует",
-                f"Профиль '{text}' уже используется в: {
-                    profiles[text]}\n. Удалите хранилище по этому пути или выберите другое имя."
+                f"Профиль '{profile_title}' уже используется в: {
+                    profiles[profile_title]}"
             )
             return
-
-        print(profiles)
-        print(provider_title)
+        result_params = {}
+        for key in settings_map.keys():
+            if key in entries_map:
+                result_params[key] = entries_map[key].get_text()
 
         try:
-            mock_additional_params = {}
-            params_json_string = json.dumps(mock_additional_params)
-            response_raw = bus.call_sync(
+            params_json_string = json.dumps(result_params)
+
+            bus.call_sync(
                 'org.zbus.pompiliusd',
                 '/org/zbus/pompiliusd',
                 'org.zbus.pompiliusd',
                 'CreateProfile',
                 GLib.Variant(
-                    '(sss)', (text, get_rclone_title(provider_title), params_json_string)),
+                    '(sss)',
+                    (profile_title, rclone_name, params_json_string)
+                ),
                 None,
                 Gio.DBusCallFlags.NONE,
                 -1,
                 None
             )
+
         except Exception as e:
             print(f"Ошибка D-Bus: {e}")
-
-        # print(f"Сижу жду ручку с бека: {text} {provider_title}")
+            self.show_error_dialog(input_dialog, "Ошибка D-Bus", str(e))
         input_dialog.destroy()
 
     def create_company_widget(self, name, logo):
