@@ -45,7 +45,7 @@ class PompiliusLinks(GObject.GObject, Nautilus.MenuProvider):
         for file in files:
             uri = file.get_uri()
             file_path = unquote(urlparse(uri).path)
-            print(profiles)
+            # print(profiles)
             for title, p in profiles.items():
                 if file_path.startswith(p):
                     profile["title"] = title

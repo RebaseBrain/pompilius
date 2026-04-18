@@ -93,7 +93,8 @@ class PompiliusIconOverlay(GObject.GObject, Nautilus.InfoProvider):
         active_profile_title = None
 
         for title, mount_root in profiles.items():
-            if current_dir.startswith(mount_root):
+            if current_dir.startswith(f"{mount_root}/{title}"):
+                print(mount_root)
                 active_profile_title = title
                 break
 
@@ -121,7 +122,7 @@ class PompiliusIconOverlay(GObject.GObject, Nautilus.InfoProvider):
                 'GetFilesStatus',
                 GLib.Variant('(sas)', (active_profile_title, file_names)),
                 None,
-                Gio.DBusCallFlags.NONE, network-receive
+                Gio.DBusCallFlags.NONE,
                 - 1,
                 None
             )
@@ -132,7 +133,7 @@ class PompiliusIconOverlay(GObject.GObject, Nautilus.InfoProvider):
 
             # Получаем статус именно для текущего файла, который обрабатывает Nautilus
             current_file_name = os.path.basename(file_path)
-            status_str = status_map.get(current_file_name, "")
+            status_str = status_map.get(current_file_name, "NOT_CACHED")
 
             # 5. Устанавливаем эмблему
             if status_str == "CACHED":
