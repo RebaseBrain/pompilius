@@ -37,6 +37,8 @@ def get_rclone_title(title: str) -> str:
             return "mega"
         case "Mail.ru Cloud":
             return "mailru"
+        case "WebDAV":
+            return "webdav"
 
     return "unknown"
 
@@ -55,7 +57,8 @@ def get_title_from_rclone(rclone_title: str) -> str:
             return "Mega"
         case "mailru":
             return "Mail.ru Cloud"
-
+        case "webdav":
+            return "WebDAV"
     return "unknown"
 
 
@@ -346,7 +349,8 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
             Provider("drive"),
             Provider("yandex"),
             Provider("iclouddrive"),
-            Provider("mailru")
+            Provider("mailru"),
+            Provider("webdav")
         ]
 
         # Наполняем сетку
