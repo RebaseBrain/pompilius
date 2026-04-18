@@ -138,7 +138,7 @@ class PompiliusIconOverlay(GObject.GObject, Nautilus.InfoProvider):
             if status_str == "CACHED":
                 icon = "document-save"
             elif status_str == "SYNCING":
-                icon = "image-loading"
+                icon = "network-receive"
             else:
                 icon = "network-wireless"
 
