@@ -121,8 +121,8 @@ class PompiliusIconOverlay(GObject.GObject, Nautilus.InfoProvider):
                 'GetFilesStatus',
                 GLib.Variant('(sas)', (active_profile_title, file_names)),
                 None,
-                Gio.DBusCallFlags.NONE,
-                -1,
+                Gio.DBusCallFlags.NONE, network-receive
+                - 1,
                 None
             )
 
@@ -132,18 +132,21 @@ class PompiliusIconOverlay(GObject.GObject, Nautilus.InfoProvider):
 
             # Получаем статус именно для текущего файла, который обрабатывает Nautilus
             current_file_name = os.path.basename(file_path)
-            status_str = status_map.get(current_file_name, "NOT_CACHED")
+            status_str = status_map.get(current_file_name, "")
 
             # 5. Устанавливаем эмблему
             if status_str == "CACHED":
                 icon = "document-save"
+                file_info.add_string_attribute('overlay_icons', icon)
+                file_info.add_emblem(icon)
             elif status_str == "SYNCING":
                 icon = "network-receive"
-            else:
+                file_info.add_string_attribute('overlay_icons', icon)
+                file_info.add_emblem(icon)
+            elif status_str == "NOT_CACHED":
                 icon = "network-wireless"
-
-            file_info.add_string_attribute('overlay_icons', icon)
-            file_info.add_emblem(icon)
+                file_info.add_string_attribute('overlay_icons', icon)
+                file_info.add_emblem(icon)
 
         except Exception as e:
             print(f"Ошибка InfoProvider: {e}")
