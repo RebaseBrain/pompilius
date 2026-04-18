@@ -108,6 +108,12 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
     def __init__(self):
         GObject.Object.__init__(self)
 
+        self.list_box = Gtk.ListBox()
+        self.list_box.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.list_box.set_show_separators(True)
+        self.list_box.connect("row-activated", self.mount_directory)
+        self.dialog = None
+
     class ProfileResponse:
         title: str
         provider: str
@@ -333,78 +339,36 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
                 -1,
                 None
             )
+            self.load_profiles()
         except Exception as e:
             print(f"Ошибка D-Bus: {e}")
         print(f"Жду ручку с бека для удаления: {profile_title}")
 
     def show_profiles(self):
-        # profiles =
+        # Создаем окно
+        self.dialog = Gtk.Window(
+            title="Выберите профиль", modal=True, default_width=400)
 
-        dialog = Gtk.Window(title="Выберите профиль",
-                            modal=True, default_width=400)
-
-        # Основной контейнер с отступами
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
         main_box.set_margin_bottom(20)
-        dialog.set_child(main_box)
+        main_box.set_margin_top(10)
 
-        profiles = []
-        try:
-            response_raw = bus.call_sync(
-                'org.zbus.pompiliusd',
-                '/org/zbus/pompiliusd',
-                'org.zbus.pompiliusd',
-                'ListProfiles',
-                None,
-                None,
-                Gio.DBusCallFlags.NONE,
-                -1,
-                None
-            )
-
-            raw_json = response_raw.unpack()[0]
-
-            # 3. Парсим внешний JSON
-            response = json.loads(raw_json)
-
-            # 4. Парсим поле data (оно у тебя тоже строка с JSON-массивом)
-            profiles_raw = json.loads(response['data'])
-
-            profiles = [Profile(name, Provider(provider))
-                        for name, provider in profiles_raw]
-        except Exception as e:
-            print(f"Ошибка D-Bus: {e}")
-
-        print
-
-        data = profiles
         header = Gtk.Label(label="Доступные профили")
-        header.add_css_class("title-4")  # Используем системный стиль заголовка
+        header.add_css_class("title-4")
         main_box.append(header)
 
-        list_box = Gtk.ListBox()
-        list_box.set_selection_mode(Gtk.SelectionMode.NONE)
-        list_box.set_show_separators(True)  # Рисует линии между строками
-
-        for profile in data:
-            row_content = self.create_profile_table_row(profile)
-
-            # В ListBox мы добавляем контент, и он сам оборачивает его в Gtk.ListBoxRow
-            list_box.append(row_content)
-
-            # Сохраняем данные для клика
-            row_container = row_content.get_parent()
-            row_container.row_id = profile.title
-
-        list_box.connect("row-activated", self.mount_directory)
-
-        # Чтобы таблица прокручивалась, если строк много
+        # Скролл-зона
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_min_content_height(300)
-        scrolled.set_child(list_box)
+        # Привязываем наш "долгоживущий" ListBox
+        scrolled.set_child(self.list_box)
+        main_box.append(scrolled)
 
-        dialog.set_child(scrolled)
-        dialog.show()
+        # Сначала загружаем данные в ListBox
+        self.load_profiles()
+
+        self.dialog.set_child(main_box)
+        self.dialog.show()
 
     def mount_directory(self, list_box, row):
 
@@ -429,6 +393,46 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
             print(f"Ошибка D-Bus: {e}")
 
         list_box.get_root().destroy()
+
+    def load_profiles(self):
+        """Очищает список и загружает данные из D-Bus заново"""
+        # 1. Очистка текущих строк в ListBox
+        while True:
+            child = self.list_box.get_first_child()
+            if not child:
+                break
+            self.list_box.remove(child)
+
+        # 2. Получение данных
+        profiles = []
+        try:
+            response_raw = bus.call_sync(
+                'org.zbus.pompiliusd',
+                '/org/zbus/pompiliusd',
+                'org.zbus.pompiliusd',
+                'ListProfiles',
+                None,
+                None,
+                Gio.DBusCallFlags.NONE,
+                -1,
+                None
+            )
+            raw_json = response_raw.unpack()[0]
+            response = json.loads(raw_json)
+            profiles_raw = json.loads(response['data'])
+
+            profiles = [Profile(name, Provider(provider))
+                        for name, provider in profiles_raw]
+        except Exception as e:
+            print(f"Ошибка загрузки профилей: {e}")
+
+        # 3. Наполнение ListBox новыми данными
+        for profile in profiles:
+            row = self.create_profile_table_row(profile)
+            self.list_box.append(row)
+
+        # Если окно уже открыто, просим его перерисоваться
+        self.list_box.queue_draw()
 
 # def get_profiles():
 #     pass
