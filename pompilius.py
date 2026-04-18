@@ -222,13 +222,14 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         print(provider_title)
 
         try:
+            mock_additional_params = {}
             response_raw = bus.call_sync(
                 'org.zbus.pompiliusd',
                 '/org/zbus/pompiliusd',
                 'org.zbus.pompiliusd',
                 'CreateProfile',
                 GLib.Variant(
-                    '(ss)', (text, get_rclone_title(provider_title))),
+                    '(ssa{ss})', (text, get_rclone_title(provider_title), mock_additional_params)),
                 None,
                 Gio.DBusCallFlags.NONE,
                 -1,
