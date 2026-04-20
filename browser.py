@@ -50,7 +50,6 @@ class PompiliusOpenInBrowser(GObject.GObject, Nautilus.MenuProvider):
         for file in files:
             uri = file.get_uri()
             file_path = unquote(urlparse(uri).path)
-            print(profiles)
             for title, p in profiles.items():
                 if file_path.startswith(p):
                     profile["title"] = title
@@ -65,7 +64,7 @@ class PompiliusOpenInBrowser(GObject.GObject, Nautilus.MenuProvider):
 
         # Создаем пункт меню
         item = Nautilus.MenuItem(
-            name="Pompilius::GetLink",
+            name="Pompilius::OpenInBrowser",
             label="Открыть файл в браузере",
             tip="Можете потом его куда-то скинуть"
         )
@@ -76,16 +75,14 @@ class PompiliusOpenInBrowser(GObject.GObject, Nautilus.MenuProvider):
 
     def get_link(self, item, files, profile):
         mock_profile = profile["title"]
-        links = []
         for file in files:
             uri = file.get_uri()
-
             absolute_path = unquote(urlparse(uri).path)
             try:
                 relative_path = os.path.relpath(
                     absolute_path, profile["mount_root"]).replace(mock_profile, "")
-                print(f"{mock_profile} {absolute_path}")
-                result = bus.call_sync(
+                
+                bus.call(
                     'org.zbus.pompiliusd',
                     '/org/zbus/pompiliusd',
                     'org.zbus.pompiliusd',
@@ -94,16 +91,19 @@ class PompiliusOpenInBrowser(GObject.GObject, Nautilus.MenuProvider):
                     None,
                     Gio.DBusCallFlags.NONE,
                     -1,
-                    None)
-
-                raw_data = result.unpack()[0]
-
-                parsed_json = json.loads(raw_data)
-                link = json.loads(parsed_json['data'])
-                display = Gdk.Display.get_default()
-                open_link(link)
-                print(link)
-
-                links.append(link)
+                    None,
+                    self.on_link_received,
+                    None
+                )
             except Exception as e:
                 print(f"Ошибка D-Bus: {e}")
+
+    def on_link_received(self, connection, res, user_data):
+        try:
+            result = connection.call_finish(res)
+            raw_data = result.unpack()[0]
+            parsed_json = json.loads(raw_data)
+            link = json.loads(parsed_json['data'])
+            open_link(link)
+        except Exception as e:
+            print(f"Ошибка при открытии ссылки: {e}")
