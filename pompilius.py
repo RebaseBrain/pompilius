@@ -1,3 +1,6 @@
+import gi
+gi.require_version('Gtk', '4.0')
+gi.require_version('Notify', '0.7')
 from gi.repository import Nautilus, GObject, Gtk, Pango, Gio, GLib
 import tomllib
 import os
@@ -7,6 +10,7 @@ from urllib.parse import unquote, urlparse
 EXTENSION_DIR = os.path.dirname(os.path.abspath(__file__))
 bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
 MAX_TIMEOUT_MS = 2**31 - 1 # Максимально возможный таймаут (около 24 дней)
+AVAILABLE_PROVIDERS = ["drive", "yandex", "iclouddrive", "mailru", "webdav"]
 
 
 _profiles_cache = None
@@ -110,10 +114,6 @@ class Profile:
 class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
     def __init__(self):
         GObject.Object.__init__(self)
-        self.list_box = Gtk.ListBox()
-        self.list_box.set_selection_mode(Gtk.SelectionMode.NONE)
-        self.list_box.set_show_separators(True)
-        self.list_box.connect("row-activated", self.mount_directory)
         self.dialog = None
         self.current_dir = None
 
@@ -176,8 +176,7 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         flowbox.set_max_children_per_line(4)
         flowbox.set_selection_mode(Gtk.SelectionMode.NONE)
 
-        providers = ["drive", "yandex", "iclouddrive", "mailru", "webdav"]
-        for p_name in providers:
+        for p_name in AVAILABLE_PROVIDERS:
             provider = Provider(p_name)
             child_widget = self.create_company_widget(provider.title, provider.get_image())
             flowbox.append(child_widget)
@@ -370,59 +369,9 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
             print(f"Ошибка при удалении профиля: {e}")
 
     def show_profiles(self):
-        self.dialog = Gtk.Window(title="Выберите профиль", modal=True, default_width=400)
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
-        set_margins(main_box, 15)
-
-        header = Gtk.Label(label="Доступные профили")
-        header.add_css_class("title-4")
-        main_box.append(header)
-
-        scrolled = Gtk.ScrolledWindow()
-        scrolled.set_min_content_height(300)
-        scrolled.set_child(self.list_box)
-        main_box.append(scrolled)
-
-        self.load_profiles()
-        self.dialog.set_child(main_box)
-        self.dialog.show()
-
-    def load_profiles(self):
-        bus.call(
-            'org.zbus.pompiliusd',
-            '/org/zbus/pompiliusd',
-            'org.zbus.pompiliusd',
-            'ListProfiles',
-            None,
-            None,
-            Gio.DBusCallFlags.NONE,
-            -1,
-            None,
-            self.on_profiles_loaded,
-            None
-        )
-
-    def on_profiles_loaded(self, connection, res, user_data):
-        try:
-            response_raw = connection.call_finish(res)
-            raw_json = response_raw.unpack()[0]
-            response = json.loads(raw_json)
-            profiles_raw = json.loads(response['data'])
-
-            # Очистка
-            while True:
-                child = self.list_box.get_first_child()
-                if not child: break
-                self.list_box.remove(child)
-
-            for name, provider_name in profiles_raw:
-                profile = Profile(name, Provider(provider_name))
-                row = self.create_profile_table_row(profile)
-                self.list_box.append(row)
-            
-            self.list_box.queue_draw()
-        except Exception as e:
-            print(f"Ошибка при загрузке профилей: {e}")
+        from profiles_dialog import ProfilesDialog
+        self.dialog = ProfilesDialog(bus, self, self.current_dir)
+        self.dialog.present()
 
     def mount_directory(self, list_box, row):
         title = getattr(row, 'profile_title', "Неизвестно")

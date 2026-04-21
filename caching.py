@@ -1,3 +1,5 @@
+import gi
+gi.require_version('Gtk', '4.0')
 from pompilius import get_existing_profiles
 import os
 from gi.repository import Nautilus, GObject, Gio, GLib

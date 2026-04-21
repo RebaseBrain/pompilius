@@ -1,3 +1,6 @@
+import gi
+gi.require_version('Gtk', '4.0')
+gi.require_version('Notify', '0.7')
 import webbrowser
 import os
 from gi.repository import Nautilus, GObject, Gio, GLib
