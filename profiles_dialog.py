@@ -43,7 +43,7 @@ class ProfilesDialog(Gtk.Window):
         sort_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         sort_box.append(Gtk.Label(label="Сортировать по:"))
         
-        self.sort_type = Gtk.DropDown.new_from_strings(["Имени (А-Я)", "Имени (Я-А)", "Провайдеру"])
+        self.sort_type = Gtk.DropDown.new_from_strings(["Имени (А-Я)", "Имени (Я-А)", "Провайдеру (А-Я)", "Провайдеру (Я-А)"])
         self.sort_type.connect("notify::selected", self.on_sort_changed)
         sort_box.append(self.sort_type)
         main_box.append(sort_box)
@@ -132,8 +132,10 @@ class ProfilesDialog(Gtk.Window):
             return 1 if p1.title.lower() > p2.title.lower() else -1
         elif sort_idx == 1: # Имя Я-А
             return -1 if p1.title.lower() > p2.title.lower() else 1
-        elif sort_idx == 2: # Провайдер
-            return 1 if p1.provider.title > p2.provider.title else -1
+        elif sort_idx == 2: # Провайдер А-Я
+            return 1 if p1.provider.title.lower() > p2.provider.title.lower() else -1
+        elif sort_idx == 3: # Провайдер Я-А
+            return -1 if p1.provider.title.lower() > p2.provider.title.lower() else 1
         return 0
 
     def on_row_activated(self, list_box, row):

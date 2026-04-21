@@ -162,30 +162,9 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         dialog.show()
 
     def create_new_profile(self):
-        dialog = Gtk.Window(title="Выберите провайдера", modal=True, default_width=400)
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
-        main_box.set_margin_bottom(20)
-        dialog.set_child(main_box)
-
-        header = Gtk.Label(label="Доступные хранилища")
-        header.add_css_class("title-4")
-        main_box.append(header)
-
-        flowbox = Gtk.FlowBox()
-        flowbox.set_valign(Gtk.Align.START)
-        flowbox.set_max_children_per_line(4)
-        flowbox.set_selection_mode(Gtk.SelectionMode.NONE)
-
-        for p_name in AVAILABLE_PROVIDERS:
-            provider = Provider(p_name)
-            child_widget = self.create_company_widget(provider.title, provider.get_image())
-            flowbox.append(child_widget)
-            container = child_widget.get_parent()
-            container.rclone_title = p_name
-
-        flowbox.connect("child-activated", self.on_company_clicked, dialog)
-        main_box.append(flowbox)
-        dialog.show()
+        from providers_dialog import ProvidersDialog
+        self.dialog = ProvidersDialog(self)
+        self.dialog.present()
 
     def on_company_clicked(self, flowbox, child, dialog):
         rclone_name = child.rclone_title
