@@ -5,7 +5,7 @@ from urllib.parse import unquote, urlparse
 
 from pompilius import get_existing_profiles, DBUS_NAME, DBUS_PATH, DBUS_IFACE
 
-REFRESH_INTERVAL_SEC = 20
+REFRESH_INTERVAL_SEC = 60
 
 # Кэш: { profile_name: timestamp последнего обновления }
 LAST_REFRESH_TIME = {}
@@ -36,6 +36,41 @@ class PompiliusRefreshOverlay(GObject.GObject, Nautilus.InfoProvider):
     def reload_config(self):
         self.profiles = get_mount_profiles()
         return True
+
+    def update_file_info(self, file_info):
+        uri = file_info.get_uri()
+        if not uri.startswith("file://"):
+            return
+
+        file_path = unquote(urlparse(uri).path)
+
+        # Определяем директорию (для папки берем ее саму, для файла - родителя)
+        current_dir = file_path if file_info.is_directory() else os.path.dirname(file_path)
+
+        # Проверяем, находимся ли мы внутри примонтированного хранилища
+        active_profile = None
+        for title, mount_full_path in self.profiles.items():
+            # Если текущий путь начинается с пути маунта хранилища
+            if current_dir.startswith(mount_full_path):
+                active_profile = title
+                break
+
+        # Если файл/папка не в хранилище - ничего не делаем
+        if not active_profile:
+            return
+
+        # Проверяем, не слишком ли часто мы дергаем рефреш
+        current_time = time.time()
+        last_time = LAST_REFRESH_TIME.get(active_profile, 0)
+         # С прошлого рефреша еще не прошло нужное кол-во времени
+        if current_time - last_time < REFRESH_INTERVAL_SEC:
+            return
+
+        # Проверяем, не запущен ли уже запрос
+        if active_profile in PENDING_REFRESHES:
+            return
+
+        self.refresh(active_profile)
 
     def refresh(self, profile):
         PENDING_REFRESHES.add(profile)
