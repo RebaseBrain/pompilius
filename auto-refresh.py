@@ -30,3 +30,9 @@ class PompiliusRefreshOverlay(GObject.GObject, Nautilus.InfoProvider):
     def __init__(self):
         super().__init__()
         self.profiles = get_mount_profiles()
+        # Обновляем список профилей раз в 10 секунд на случай изменения конфига
+        GLib.timeout_add(10000, self.reload_config)
+
+    def reload_config(self):
+        self.profiles = get_mount_profiles()
+        return True
