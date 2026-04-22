@@ -25,3 +25,8 @@ def get_mount_profiles():
     for name, base_path in profiles_raw.items():
         profiles[name] = os.path.join(base_path, name)
     return profiles
+
+class PompiliusRefreshOverlay(GObject.GObject, Nautilus.InfoProvider):
+    def __init__(self):
+        super().__init__()
+        self.profiles = get_mount_profiles()
