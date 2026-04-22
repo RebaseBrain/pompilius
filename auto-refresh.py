@@ -36,3 +36,13 @@ class PompiliusRefreshOverlay(GObject.GObject, Nautilus.InfoProvider):
     def reload_config(self):
         self.profiles = get_mount_profiles()
         return True
+
+    def on_refresh_done(self, connection, res, profile):
+        try:
+            # Не нужно парсить ответ демона, достаточно того, что ошибок нет.
+            _ = connection.call_finish(res)
+        except Exception as e:
+            print(f"D-Bus Refresh вернул ошибку для {profile}: {e}")
+        finally:
+            # Снимаем блокировку запроса
+            PENDING_REFRESHES.discard(profile)
