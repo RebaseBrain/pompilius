@@ -37,6 +37,32 @@ class PompiliusRefreshOverlay(GObject.GObject, Nautilus.InfoProvider):
         self.profiles = get_mount_profiles()
         return True
 
+    def refresh(self, profile):
+        PENDING_REFRESHES.add(profile)
+        # Ставим timestamp сразу, чтобы другие файлы в этой же директории
+        # не создавали спам вызовов
+        LAST_REFRESH_TIME[profile] = time.time()
+
+        try:
+            # Вызываем Refresh от корня хранилища, чтобы добавить все новые
+            # файлы из всех дочерних директорий
+            bus.call(
+                DBUS_NAME,
+                DBUS_PATH,
+                DBUS_IFACE,
+                'Refresh',
+                GLib.Variant('(ss)', (profile, ".")),
+                None,
+                Gio.DBusCallFlags.NONE,
+                -1,
+                None,
+                self.on_refresh_done,
+                profile
+            )
+        except Exception as e:
+            print(f"Ошибка при вызове Refresh для {profile}: {e}")
+            PENDING_REFRESHES.discard(profile)
+
     def on_refresh_done(self, connection, res, profile):
         try:
             # Не нужно парсить ответ демона, достаточно того, что ошибок нет.
