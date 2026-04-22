@@ -1,4 +1,4 @@
-from pompilius import get_existing_profiles
+from pompilius import DBUS_IFACE, DBUS_NAME, DBUS_PATH, get_existing_profiles
 import os
 from gi.repository import Nautilus, GObject, Gio, GLib
 
@@ -110,9 +110,9 @@ class PompiliusCaching(GObject.GObject, Nautilus.MenuProvider):
                 # 3. Вызов D-Bus метода CacheDirectory
                 # Сигнатура 's' — одна строка (путь)
                 bus.call_sync(
-                    'org.zbus.pompiliusd',
-                    '/org/zbus/pompiliusd',
-                    'org.zbus.pompiliusd',
+                    DBUS_NAME,
+                    DBUS_PATH,
+                    DBUS_IFACE,
                     'CacheDirectory',
                     GLib.Variant('(s)', (abs_path,)),
                     None,

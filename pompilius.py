@@ -4,6 +4,9 @@ import os
 import json
 from urllib.parse import unquote, urlparse
 
+DBUS_NAME = 'org.zbus.pompiliusd'
+DBUS_PATH = '/org/zbus/pompiliusd'
+DBUS_IFACE = 'org.zbus.pompiliusd'
 EXTENSION_DIR = os.path.dirname(os.path.abspath(__file__))
 bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
 
@@ -88,9 +91,9 @@ class Provider:
 
         try:
             raw_response = bus.call_sync(
-                'org.zbus.pompiliusd',           # Bus name
-                '/org/zbus/pompiliusd',          # Object path
-                'org.zbus.pompiliusd',           # Interface name
+                DBUS_NAME,           # Bus name
+                DBUS_PATH,          # Object path
+                DBUS_IFACE,           # Interface name
                 'GetProviderOptions',                     # Method
                 # Аргументы (сигнатура s)
                 GLib.Variant('(s)', (rclone_title,)),
@@ -291,9 +294,9 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
             params_json_string = json.dumps(result_params)
 
             bus.call_sync(
-                'org.zbus.pompiliusd',
-                '/org/zbus/pompiliusd',
-                'org.zbus.pompiliusd',
+                DBUS_NAME,           # Bus name
+                DBUS_PATH,          # Object path
+                DBUS_IFACE,           # Interface name
                 'CreateProfile',
                 GLib.Variant(
                     '(sss)',
@@ -435,9 +438,9 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
 
         try:
             response_raw = bus.call_sync(
-                'org.zbus.pompiliusd',
-                '/org/zbus/pompiliusd',
-                'org.zbus.pompiliusd',
+                DBUS_NAME,           # Bus name
+                DBUS_PATH,          # Object path
+                DBUS_IFACE,           # Interface name
                 'DeleteProfile',
                 GLib.Variant(
                     '(s)', (profile_title,)),
@@ -532,9 +535,9 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         try:
             # 4. Реальный вызов D-Bus
             bus.call_sync(
-                'org.zbus.pompiliusd',
-                '/org/zbus/pompiliusd',
-                'org.zbus.pompiliusd',
+                DBUS_NAME,           # Bus name
+                DBUS_PATH,          # Object path
+                DBUS_IFACE,           # Interface name
                 'Mount',
                 GLib.Variant('(ssss)', (
                     title,
@@ -571,9 +574,9 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         profiles = []
         try:
             response_raw = bus.call_sync(
-                'org.zbus.pompiliusd',
-                '/org/zbus/pompiliusd',
-                'org.zbus.pompiliusd',
+                DBUS_NAME,           # Bus name
+                DBUS_PATH,          # Object path
+                DBUS_IFACE,           # Interface name
                 'ListProfiles',
                 None,
                 None,

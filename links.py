@@ -3,7 +3,7 @@ import json
 from gi.repository import Nautilus, GObject, Gio, GLib, Gdk, Notify
 from urllib.parse import unquote, urlparse
 import os
-from pompilius import get_existing_profiles
+from pompilius import DBUS_IFACE, DBUS_NAME, DBUS_PATH, get_existing_profiles
 
 
 bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
@@ -81,9 +81,9 @@ class PompiliusLinks(GObject.GObject, Nautilus.MenuProvider):
                 relative_path = os.path.relpath(
                     absolute_path, profile["mount_root"]).replace(mock_profile, "")
                 result = bus.call_sync(
-                    'org.zbus.pompiliusd',
-                    '/org/zbus/pompiliusd',
-                    'org.zbus.pompiliusd',
+                    DBUS_NAME,
+                    DBUS_PATH,
+                    DBUS_IFACE,
                     'Link',
                     GLib.Variant('(ss)', (mock_profile, relative_path)),
                     None,
