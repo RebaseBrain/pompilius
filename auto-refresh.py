@@ -102,6 +102,7 @@ class PompiliusRefreshOverlay(GObject.GObject, Nautilus.InfoProvider):
         try:
             # Не нужно парсить ответ демона, достаточно того, что ошибок нет.
             _ = connection.call_finish(res)
+            print(f"Обновил хранилище: {profile}")
         except Exception as e:
             print(f"D-Bus Refresh вернул ошибку для {profile}: {e}")
         finally:
