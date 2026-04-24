@@ -6,57 +6,62 @@ from urllib.parse import unquote, urlparse
 
 EXTENSION_DIR = os.path.dirname(os.path.abspath(__file__))
 bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+MAX_TIMEOUT_MS = 2**31 - 1 # Максимально возможный таймаут (около 24 дней)
 
+
+_profiles_cache = None
+_profiles_cache_mtime = 0
 
 def get_existing_profiles():
+    global _profiles_cache, _profiles_cache_mtime
     config_path = os.path.expanduser("~/.config/pompilius/config.toml")
     if not os.path.exists(config_path):
         return {}
 
-    with open(config_path, "rb") as f:
-        data = tomllib.load(f)
-        return data.get("profiles", {})
+    try:
+        mtime = os.path.getmtime(config_path)
+        if _profiles_cache is not None and mtime <= _profiles_cache_mtime:
+            return _profiles_cache
 
-
-class ProfileResponse:
-    title: str
-    provider: str
+        with open(config_path, "rb") as f:
+            data = tomllib.load(f)
+            _profiles_cache = data.get("profiles", {})
+            _profiles_cache_mtime = mtime
+            return _profiles_cache
+    except Exception as e:
+        print(f"Ошибка при чтении конфига: {e}")
+        return _profiles_cache if _profiles_cache is not None else {}
 
 
 def get_rclone_title(title: str) -> str:
     match title:
-        case "Yandex Disk":
+        case "Яндекс.Диск":
             return "yandex"
         case "Google Drive":
             return "drive"
-        case "Mail.ru Cloud":
+        case "Облако@Mail.ru":
             return "mailru"
         case "iCloud Drive":
             return "iclouddrive"
-        case "Mega":
+        case "MEGA":
             return "mega"
-        case "Mail.ru Cloud":
-            return "mailru"
         case "WebDAV":
             return "webdav"
-
     return "unknown"
 
 
 def get_title_from_rclone(rclone_title: str) -> str:
     match rclone_title:
         case "yandex":
-            return "Yandex Disk"
+            return "Яндекс.Диск"
         case "drive":
             return "Google Drive"
         case "mailru":
-            return "Mail.ru Cloud"
+            return "Облако@Mail.ru"
         case "iclouddrive":
             return "iCloud Drive"
         case "mega":
-            return "Mega"
-        case "mailru":
-            return "Mail.ru Cloud"
+            return "MEGA"
         case "webdav":
             return "WebDAV"
     return "unknown"
@@ -76,101 +81,46 @@ def get_logo_path_from_rclone(rclone_title: str) -> str:
 
 
 class Provider:
-    title: str
-    logo_path: str
-    settings: str
-    rclone_title: str
-
     def __init__(self, rclone_title):
+        self.rclone_title = rclone_title
         self.title = get_title_from_rclone(rclone_title)
         self.logo_path = get_logo_path_from_rclone(rclone_title)
-        self.settings_list = []
-
-        try:
-            raw_response = bus.call_sync(
-                'org.zbus.pompiliusd',           # Bus name
-                '/org/zbus/pompiliusd',          # Object path
-                'org.zbus.pompiliusd',           # Interface name
-                'GetProviderOptions',                     # Method
-                # Аргументы (сигнатура s)
-                GLib.Variant('(s)', (rclone_title,)),
-                # Ожидаемый тип ответа (None для любого)
-                None,
-                Gio.DBusCallFlags.NONE,
-                -1,                             # Таймаут по умолчанию
-                None
-            )
-
-            raw_json = raw_response.unpack()[0]
-            response = json.loads(raw_json)
-
-            temp_list = json.loads(response['data'])
-
-            self.settings_list = {opt['Name']: opt for opt in temp_list}
-        except Exception as e:
-            print(f"Ошибка D-Bus при создании провайдера: {e}")
+        self.settings_list = {}
 
     def get_image(self) -> Gtk.Image:
         full_path = os.path.join(EXTENSION_DIR, self.logo_path)
-        print(full_path)
-
         if os.path.exists(full_path):
             return Gtk.Image.new_from_file(full_path)
-
         return Gtk.Image.new_from_icon_name(self.logo_path)
 
 
-def call_dbus_method(self):
-    try:
-        bus.call_sync(
-            'org.zbus.cloud_api',           # Bus name
-            '/org/zbus/cloud_api',          # Object path
-            'org.zbus.cloud_api',           # Interface name
-            'SayHello',                     # Method
-            GLib.Variant('(s)', ("Egor",)),  # Аргументы (сигнатура s)
-            # Ожидаемый тип ответа (None для любого)
-            None,
-            Gio.DBusCallFlags.NONE,
-            -1,                             # Таймаут по умолчанию
-            None
-        )
-        print("D-Bus метод вызван напрямую")
-    except Exception as e:
-        print(f"Ошибка D-Bus: {e}")
+def set_margins(widget, value):
+    widget.set_margin_top(value)
+    widget.set_margin_bottom(value)
+    widget.set_margin_start(value)
+    widget.set_margin_end(value)
 
 
 class Profile:
-    title: str
-    provider: Provider
-    entry_size: int
-    entry_time: int
-
     def __init__(self, title, provider: Provider):
         self.title = title
         self.provider = provider
 
 
 class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
-    current_dir: str
-
     def __init__(self):
         GObject.Object.__init__(self)
-
         self.list_box = Gtk.ListBox()
         self.list_box.set_selection_mode(Gtk.SelectionMode.NONE)
         self.list_box.set_show_separators(True)
         self.list_box.connect("row-activated", self.mount_directory)
         self.dialog = None
-
-    class ProfileResponse:
-        title: str
-        provider: str
+        self.current_dir = None
 
     def get_background_items(self, folder):
-        self.current_dir = absolute_path = unquote(
-            urlparse(folder.get_uri()).path)
+        self.current_dir = unquote(urlparse(folder.get_uri()).path)
         item = Nautilus.MenuItem(
-            name='ExampleMenuProvider::CreateFusionBackground',
+            name='Pompilius::AddRemote',
             label='Добавить удалённое хранилище',
             tip='Добавить хранилище в текущую папку'
         )
@@ -206,201 +156,172 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
                 self.create_new_profile()
             elif response_id == 2:
                 self.show_profiles()
-
             d.destroy()
 
-        # Подключаем обработчик к сигналу 'response'
         dialog.connect("response", on_response)
         dialog.show()
-        print("Пункт меню нажат!")
+
+    def create_new_profile(self):
+        dialog = Gtk.Window(title="Выберите провайдера", modal=True, default_width=400)
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
+        main_box.set_margin_bottom(20)
+        dialog.set_child(main_box)
+
+        header = Gtk.Label(label="Доступные хранилища")
+        header.add_css_class("title-4")
+        main_box.append(header)
+
+        flowbox = Gtk.FlowBox()
+        flowbox.set_valign(Gtk.Align.START)
+        flowbox.set_max_children_per_line(4)
+        flowbox.set_selection_mode(Gtk.SelectionMode.NONE)
+
+        providers = ["drive", "yandex", "iclouddrive", "mailru", "webdav"]
+        for p_name in providers:
+            provider = Provider(p_name)
+            child_widget = self.create_company_widget(provider.title, provider.get_image())
+            flowbox.append(child_widget)
+            container = child_widget.get_parent()
+            container.rclone_title = p_name
+
+        flowbox.connect("child-activated", self.on_company_clicked, dialog)
+        main_box.append(flowbox)
+        dialog.show()
 
     def on_company_clicked(self, flowbox, child, dialog):
-        # child.company_id содержит читаемое название, нам нужно техническое
-        # В create_new_profile мы задали container.company_id = company.title (читаемое)
-        # Нам нужен объект Provider, который мы создали в списке companies
-        rclone_name = get_rclone_title(child.company_id)
-        provider = Provider(rclone_name)
+        rclone_name = child.rclone_title
+        
+        # Загружаем настройки провайдера асинхронно перед открытием диалога ввода
+        bus.call(
+            'org.zbus.pompiliusd',
+            '/org/zbus/pompiliusd',
+            'org.zbus.pompiliusd',
+            'GetProviderOptions',
+            GLib.Variant('(s)', (rclone_name,)),
+            None,
+            Gio.DBusCallFlags.NONE,
+            -1,
+            None,
+            self.on_provider_options_received,
+            (rclone_name, dialog)
+        )
 
-        input_dialog = Gtk.Window(
-            title=f"Настройка {provider.title}", modal=True)
+    def on_provider_options_received(self, connection, res, user_data):
+        rclone_name, parent_dialog = user_data
+        try:
+            raw_response = connection.call_finish(res)
+            raw_json = raw_response.unpack()[0]
+            response = json.loads(raw_json)
+            temp_list = json.loads(response['data'])
+            settings_list = {opt['Name']: opt for opt in temp_list}
+            
+            provider = Provider(rclone_name)
+            provider.settings_list = settings_list
+            
+            self.show_profile_input_dialog(provider, parent_dialog)
+        except Exception as e:
+            print(f"Ошибка при получении опций провайдера: {e}")
+
+    def show_profile_input_dialog(self, provider, parent_dialog):
+        input_dialog = Gtk.Window(title=f"Настройка {provider.title}", modal=True)
         input_dialog.set_default_size(350, -1)
 
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        vbox.set_margin_end(15)
+        set_margins(vbox, 15)
 
         vbox.append(Gtk.Label(label="Название профиля", xalign=0))
         entry_profile_name = Gtk.Entry()
         vbox.append(entry_profile_name)
 
         entries_map = {}
-
-        for info in provider.settings_list.values():
-            name = info.get('Name')
-
-            label = Gtk.Label(label=name, xalign=0)
-            vbox.append(label)
-
+        for name, info in provider.settings_list.items():
+            vbox.append(Gtk.Label(label=name, xalign=0))
             entry = Gtk.Entry()
-
-            clean_name = name.lower()
-            if "password" in clean_name or "secret" in clean_name:
+            if "password" in name.lower() or "secret" in name.lower():
                 entry.set_visibility(False)
-
             vbox.append(entry)
-
             entries_map[name] = entry
 
         btn_create = Gtk.Button(label="Создать и привязать")
         btn_create.add_css_class("suggested-action")
-
-        btn_create.connect(
-            "clicked",
-            self.create_profile,
-            input_dialog,
-            rclone_name,
-            entry_profile_name,
-            entries_map,
-            provider.settings_list
-        )
+        btn_create.connect("clicked", self.create_profile_clicked, input_dialog, provider.rclone_title, entry_profile_name, entries_map, provider.settings_list)
 
         vbox.append(btn_create)
         input_dialog.set_child(vbox)
         input_dialog.present()
-        dialog.destroy()
+        parent_dialog.destroy()
 
-    def create_profile(self, button, input_dialog, rclone_name, entry_profile_name, entries_map, settings_map):
-        # 1. Достаем имя профиля
+    def create_profile_clicked(self, button, input_dialog, rclone_name, entry_profile_name, entries_map, settings_map):
         profile_title = entry_profile_name.get_text().strip()
-
-        # 2. Проверка на существование (твой код)
         profiles = get_existing_profiles()
         if profile_title in profiles:
-            self.show_error_dialog(
-                input_dialog,
-                "Профиль уже существует",
-                f"Профиль '{profile_title}' уже используется в: {
-                    profiles[profile_title]}"
-            )
+            self.show_error_dialog(input_dialog, "Профиль уже существует", f"Профиль '{profile_title}' уже используется в: {profiles[profile_title]}")
             return
-        result_params = {}
-        for key in settings_map.keys():
-            if key in entries_map:
-                result_params[key] = entries_map[key].get_text()
 
+        button.set_sensitive(False)
+        button.set_label("Создание...")
+
+        result_params = {key: entry.get_text() for key, entry in entries_map.items()}
         try:
             params_json_string = json.dumps(result_params)
-
-            bus.call_sync(
+            bus.call(
                 'org.zbus.pompiliusd',
                 '/org/zbus/pompiliusd',
                 'org.zbus.pompiliusd',
                 'CreateProfile',
-                GLib.Variant(
-                    '(sss)',
-                    (profile_title, rclone_name, params_json_string)
-                ),
+                GLib.Variant('(sss)', (profile_title, rclone_name, params_json_string)),
                 None,
                 Gio.DBusCallFlags.NONE,
-                -1,
-                None
+                MAX_TIMEOUT_MS,
+                None,
+                self.on_profile_created,
+                (input_dialog, button)
             )
-
         except Exception as e:
+            button.set_sensitive(True)
+            button.set_label("Создать и привязать")
             print(f"Ошибка D-Bus: {e}")
             self.show_error_dialog(input_dialog, "Ошибка D-Bus", str(e))
-        input_dialog.destroy()
+
+    def on_profile_created(self, connection, res, user_data):
+        input_dialog, button = user_data
+        try:
+            connection.call_finish(res)
+            input_dialog.destroy()
+        except Exception as e:
+            button.set_sensitive(True)
+            button.set_label("Создать и привязать")
+            print(f"Ошибка при создании профиля: {e}")
+            self.show_error_dialog(input_dialog, "Ошибка при создании", str(e))
 
     def create_company_widget(self, name, logo):
-        """Создает маленькую карточку: Логотип + Название снизу"""
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
         vbox.set_margin_bottom(10)
-
         logo.set_pixel_size(48)
-
         label = Gtk.Label(label=name)
         label.set_ellipsize(Pango.EllipsizeMode.END)
         label.set_max_width_chars(12)
-
         vbox.append(logo)
         vbox.append(label)
         return vbox
 
-    def create_new_profile(self):
-        dialog = Gtk.Window(title="Выберите провайдера",
-                            modal=True, default_width=400)
-
-        # Основной контейнер с отступами
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
-        main_box.set_margin_bottom(20)
-        dialog.set_child(main_box)
-
-        header = Gtk.Label(label="Доступные хранилища")
-        header.add_css_class("title-4")  # Используем системный стиль заголовка
-        main_box.append(header)
-
-        # Создаем сетку (FlowBox)
-        flowbox = Gtk.FlowBox()
-        flowbox.set_valign(Gtk.Align.START)
-        flowbox.set_max_children_per_line(4)  # По 4 логотипа в ряд
-        # Нам не нужно выделение, только клик
-        flowbox.set_selection_mode(Gtk.SelectionMode.NONE)
-
-        companies = [
-            Provider("drive"),
-            Provider("yandex"),
-            Provider("iclouddrive"),
-            Provider("mailru"),
-            Provider("webdav")
-        ]
-
-        # Наполняем сетку
-        for company in companies:
-            child_widget = self.create_company_widget(
-                company.title, company.get_image())
-            flowbox.append(child_widget)
-
-            container = child_widget.get_parent()
-            container.company_id = company.title
-
-        # Подключаем событие клика
-        flowbox.connect("child-activated", self.on_company_clicked, dialog)
-        # Если кликнули — закрываем окно (опционально)
-        # flowbox.connect("child-activated", lambda fb, ch: dialog.destroy())
-
-        main_box.append(flowbox)
-        dialog.show()
-
     def create_profile_table_row(self, profile: Profile):
-        """Создает одну строку таблицы с двумя колонками"""
-
-        # Горизонтальный контейнер для всей строки
-
-        # Делаем горизонтальный контейнер, чтобы использовать его в таблице
         row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
-        row_box.set_margin_start(10)
-        row_box.set_margin_end(10)
-        row_box.set_margin_top(5)
-        row_box.set_margin_bottom(5)
+        set_margins(row_box, 10)
 
-        # Эээээ по моему это названия профилей
         label_id = Gtk.Label(label=profile.title)
         label_id.set_xalign(0)
         label_id.set_hexpand(True)
 
-        # Провайдеры
         provider_icon = profile.provider.get_image()
         provider_icon.set_pixel_size(24)
         provider_caption = Gtk.Label(label=profile.provider.title)
         provider_caption.add_css_class("caption")
 
-        provider_vbox = Gtk.Box(
-            orientation=Gtk.Orientation.VERTICAL, spacing=2)
-
-        provider_vbox.append(
-            provider_icon)
+        provider_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        provider_vbox.append(provider_icon)
         provider_vbox.append(provider_caption)
 
-        # Кнопка удаления
         delete_icon = Gtk.Image.new_from_icon_name("user-trash-symbolic")
         delete_icon.set_pixel_size(24)
         delete_caption = Gtk.Label(label="Удалить")
@@ -414,10 +335,6 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         delete_button.set_has_frame(False)
         delete_button.set_child(delete_vbox)
 
-        icon = Gtk.Image.new_from_icon_name("network-server-symbolic")
-        icon.set_pixel_size(24)
-
-        # Добавляем все эти приколы
         row_box.append(label_id)
         row_box.append(provider_vbox)
         row_box.append(delete_button)
@@ -425,195 +342,147 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         row = Gtk.ListBoxRow()
         row.set_activatable(True)
         row.set_child(row_box)
-
-        delete_button.connect("clicked", self.delete_profile, profile.title)
         row.profile_title = profile.title
 
+        delete_button.connect("clicked", self.delete_profile, profile.title)
         return row
 
     def delete_profile(self, button, profile_title):
+        bus.call(
+            'org.zbus.pompiliusd',
+            '/org/zbus/pompiliusd',
+            'org.zbus.pompiliusd',
+            'DeleteProfile',
+            GLib.Variant('(s)', (profile_title,)),
+            None,
+            Gio.DBusCallFlags.NONE,
+            -1,
+            None,
+            self.on_profile_deleted,
+            None
+        )
 
+    def on_profile_deleted(self, connection, res, user_data):
         try:
-            response_raw = bus.call_sync(
-                'org.zbus.pompiliusd',
-                '/org/zbus/pompiliusd',
-                'org.zbus.pompiliusd',
-                'DeleteProfile',
-                GLib.Variant(
-                    '(s)', (profile_title,)),
-                None,
-                Gio.DBusCallFlags.NONE,
-                -1,
-                None
-            )
+            connection.call_finish(res)
             self.load_profiles()
         except Exception as e:
-            print(f"Ошибка D-Bus: {e}")
-        print(f"Жду ручку с бека для удаления: {profile_title}")
+            print(f"Ошибка при удалении профиля: {e}")
 
     def show_profiles(self):
-        # Создаем окно
-        self.dialog = Gtk.Window(
-            title="Выберите профиль", modal=True, default_width=400)
-
+        self.dialog = Gtk.Window(title="Выберите профиль", modal=True, default_width=400)
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
-        main_box.set_margin_bottom(20)
-        main_box.set_margin_top(10)
+        set_margins(main_box, 15)
 
         header = Gtk.Label(label="Доступные профили")
         header.add_css_class("title-4")
         main_box.append(header)
 
-        # Скролл-зона
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_min_content_height(300)
-        # Привязываем наш "долгоживущий" ListBox
         scrolled.set_child(self.list_box)
         main_box.append(scrolled)
 
-        # Сначала загружаем данные в ListBox
         self.load_profiles()
-
         self.dialog.set_child(main_box)
         self.dialog.show()
 
-    def mount_directory(self, list_box, row):
-        # 1. Получаем имя профиля из выбранной строки
-        title = getattr(row, 'profile_title', "Неизвестно")
-
-        # 2. Создаем окно для уточнения параметров перед монтированием
-        mount_params_dialog = Gtk.Window(
-            title=f"Параметры монтирования: {title}",
-            modal=True,
-            default_width=300
+    def load_profiles(self):
+        bus.call(
+            'org.zbus.pompiliusd',
+            '/org/zbus/pompiliusd',
+            'org.zbus.pompiliusd',
+            'ListProfiles',
+            None,
+            None,
+            Gio.DBusCallFlags.NONE,
+            -1,
+            None,
+            self.on_profiles_loaded,
+            None
         )
 
+    def on_profiles_loaded(self, connection, res, user_data):
+        try:
+            response_raw = connection.call_finish(res)
+            raw_json = response_raw.unpack()[0]
+            response = json.loads(raw_json)
+            profiles_raw = json.loads(response['data'])
+
+            # Очистка
+            while True:
+                child = self.list_box.get_first_child()
+                if not child: break
+                self.list_box.remove(child)
+
+            for name, provider_name in profiles_raw:
+                profile = Profile(name, Provider(provider_name))
+                row = self.create_profile_table_row(profile)
+                self.list_box.append(row)
+            
+            self.list_box.queue_draw()
+        except Exception as e:
+            print(f"Ошибка при загрузке профилей: {e}")
+
+    def mount_directory(self, list_box, row):
+        title = getattr(row, 'profile_title', "Неизвестно")
+        mount_params_dialog = Gtk.Window(title=f"Параметры монтирования: {title}", modal=True, default_width=300)
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        vbox.set_margin_end(15)
+        set_margins(vbox, 15)
         mount_params_dialog.set_child(vbox)
 
-        # Поле ввода Max Size
-        vbox.append(Gtk.Label(label="Максимальный размер кэша (ГБ):", xalign=0))
+        vbox.append(Gtk.Label(label="Максимальный размер кеша (ГБ):", xalign=0))
         entry_size = Gtk.Entry()
-        entry_size.set_text("10")  # Значение по умолчанию
+        entry_size.set_text("10")
         vbox.append(entry_size)
 
-        # Поле ввода Max Time
-        vbox.append(Gtk.Label(label="Время жизни кэша (часы):", xalign=0))
+        vbox.append(Gtk.Label(label="Время жизни кеша (часы):", xalign=0))
         entry_time = Gtk.Entry()
-        entry_time.set_text("24")  # Значение по умолчанию
+        entry_time.set_text("24")
         vbox.append(entry_time)
 
-        # Кнопка подтверждения
         btn_confirm = Gtk.Button(label="Подключить")
         btn_confirm.add_css_class("suggested-action")
-
-        # Передаем всё необходимое в фпередаю название профиля, открывалось окошко,ункцию исполнения
-        btn_confirm.connect(
-            "clicked",
-            self.execute_mount,
-            title,
-            entry_size,
-            entry_time,
-            mount_params_dialog
-        )
+        btn_confirm.connect("clicked", self.execute_mount, title, entry_size, entry_time, mount_params_dialog)
 
         vbox.append(btn_confirm)
         mount_params_dialog.present()
 
     def execute_mount(self, button, title, entry_size, entry_time, current_dialog):
-        # 3. Собираем данные из полей
         max_size = entry_size.get_text().strip()
         max_time = entry_time.get_text().strip()
 
-        print(f"Выполняю монтирование: {title} в {
-              self.current_dir} ({max_size}, {max_time})")
+        button.set_sensitive(False)
+        button.set_label("Подключение...")
 
         try:
-            # 4. Реальный вызов D-Bus
-            bus.call_sync(
+            bus.call(
                 'org.zbus.pompiliusd',
                 '/org/zbus/pompiliusd',
                 'org.zbus.pompiliusd',
                 'Mount',
-                GLib.Variant('(ssss)', (
-                    title,
-                    self.current_dir,
-                    max_size,
-                    max_time
-                )),
+                GLib.Variant('(ssss)', (title, self.current_dir, max_size, max_time)),
                 None,
                 Gio.DBusCallFlags.NONE,
-                -1,
-                None
+                MAX_TIMEOUT_MS,
+                None,
+                self.on_mount_finished,
+                (current_dialog, button)
             )
+        except Exception as e:
+            button.set_sensitive(True)
+            button.set_label("Подключить")
+            self.show_error_dialog(current_dialog, "Ошибка монтирования", str(e))
 
+    def on_mount_finished(self, connection, res, user_data):
+        current_dialog, button = user_data
+        try:
+            connection.call_finish(res)
             current_dialog.destroy()
-
             if self.dialog:
                 self.dialog.destroy()
                 self.dialog = None
-
         except Exception as e:
-            self.show_error_dialog(
-                current_dialog, "Ошибка монтирования", str(e))
-
-    def load_profiles(self):
-        """Очищает список и загружает данные из D-Bus заново"""
-        # 1. Очистка текущих строк в ListBox
-        while True:
-            child = self.list_box.get_first_child()
-            if not child:
-                break
-            self.list_box.remove(child)
-
-        # 2. Получение данных
-        profiles = []
-        try:
-            response_raw = bus.call_sync(
-                'org.zbus.pompiliusd',
-                '/org/zbus/pompiliusd',
-                'org.zbus.pompiliusd',
-                'ListProfiles',
-                None,
-                None,
-                Gio.DBusCallFlags.NONE,
-                -1,
-                None
-            )
-            raw_json = response_raw.unpack()[0]
-            response = json.loads(raw_json)
-            profiles_raw = json.loads(response['data'])
-
-            profiles = [Profile(name, Provider(provider))
-                        for name, provider in profiles_raw]
-        except Exception as e:
-            print(f"Ошибка загрузки профилей: {e}")
-
-        # 3. Наполнение ListBox новыми данными
-        for profile in profiles:
-            row = self.create_profile_table_row(profile)
-            self.list_box.append(row)
-
-        # Если окно уже открыто, просим его перерисоваться
-        self.list_box.queue_draw()
-
-# def get_profiles():
-#     pass
-#     # bus.call_sync(
-#     #     'org.zbus.cloud_api',           # Bus name
-#     #     '/org/zbus/cloud_api',          # Object path
-#     #     'org.zbus.cloud_api',           # Interface name
-#     #     'SayHello',                     # Method
-#     #     GLib.Variant('(s)', ("Egor",)), # Аргументы (сигнатура s)
-#     #     None,                           # Ожидаемый тип ответа (None для любого)
-#     #     Gio.DBusCallFlags.NONE,
-#     #     -1,                             # Таймаут по умолчанию
-#     #     None
-#     # )
-#     data = [
-#     ("My Yandex", "Amazon",),
-#     ("Ne my Yandex", "Google", ),
-#     ("Google диск", "WebDAV", )
-#     ]
-#
+            button.set_sensitive(True)
+            button.set_label("Подключить")
+            self.show_error_dialog(current_dialog, "Ошибка монтирования", str(e))
