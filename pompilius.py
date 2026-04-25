@@ -4,6 +4,9 @@ import os
 import json
 from urllib.parse import unquote, urlparse
 
+DBUS_NAME = 'org.zbus.pompiliusd'
+DBUS_PATH = '/org/zbus/pompiliusd'
+DBUS_IFACE = 'org.zbus.pompiliusd'
 EXTENSION_DIR = os.path.dirname(os.path.abspath(__file__))
 bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
 MAX_TIMEOUT_MS = 2**31 - 1 # Максимально возможный таймаут (около 24 дней)
@@ -190,7 +193,7 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
 
     def on_company_clicked(self, flowbox, child, dialog):
         rclone_name = child.rclone_title
-        
+
         # Загружаем настройки провайдера асинхронно перед открытием диалога ввода
         bus.call(
             'org.zbus.pompiliusd',
@@ -214,10 +217,10 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
             response = json.loads(raw_json)
             temp_list = json.loads(response['data'])
             settings_list = {opt['Name']: opt for opt in temp_list}
-            
+
             provider = Provider(rclone_name)
             provider.settings_list = settings_list
-            
+
             self.show_profile_input_dialog(provider, parent_dialog)
         except Exception as e:
             print(f"Ошибка при получении опций провайдера: {e}")
@@ -265,9 +268,9 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         try:
             params_json_string = json.dumps(result_params)
             bus.call(
-                'org.zbus.pompiliusd',
-                '/org/zbus/pompiliusd',
-                'org.zbus.pompiliusd',
+                DBUS_NAME,           # Bus name
+                DBUS_PATH,          # Object path
+                DBUS_IFACE,           # Interface name
                 'CreateProfile',
                 GLib.Variant('(sss)', (profile_title, rclone_name, params_json_string)),
                 None,
@@ -349,9 +352,9 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
 
     def delete_profile(self, button, profile_title):
         bus.call(
-            'org.zbus.pompiliusd',
-            '/org/zbus/pompiliusd',
-            'org.zbus.pompiliusd',
+            DBUS_NAME,           # Bus name
+            DBUS_PATH,          # Object path
+            DBUS_IFACE,           # Interface name
             'DeleteProfile',
             GLib.Variant('(s)', (profile_title,)),
             None,
@@ -419,7 +422,7 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
                 profile = Profile(name, Provider(provider_name))
                 row = self.create_profile_table_row(profile)
                 self.list_box.append(row)
-            
+
             self.list_box.queue_draw()
         except Exception as e:
             print(f"Ошибка при загрузке профилей: {e}")
@@ -457,9 +460,9 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
 
         try:
             bus.call(
-                'org.zbus.pompiliusd',
-                '/org/zbus/pompiliusd',
-                'org.zbus.pompiliusd',
+                DBUS_NAME,           # Bus name
+                DBUS_PATH,          # Object path
+                DBUS_IFACE,           # Interface name
                 'Mount',
                 GLib.Variant('(ssss)', (title, self.current_dir, max_size, max_time)),
                 None,
