@@ -74,42 +74,37 @@ class PompiliusCaching(GObject.GObject, Nautilus.MenuProvider):
             absolute_path = unquote(urlparse(uri).path)
             try:
                 relative_path = os.path.relpath(
-                    absolute_path, profile["mount_root"]).replace(mock_profile, "")[1::]
-                print(f"{mock_profile} {relative_path}")
-                bus.call_sync(
-                    'org.zbus.pompiliusd',
-                    '/org/zbus/pompiliusd',
-                    'org.zbus.pompiliusd',
+                    absolute_path, profile["mount_root"]).replace(mock_profile, "").lstrip(os.sep)
+
+                bus.call(
+                    DBUS_NAME,
+                    DBUS_PATH,
+                    DBUS_IFACE,
                     'DeleteCachePath',
                     GLib.Variant('(ss)', (mock_profile, relative_path)),
                     None,
                     Gio.DBusCallFlags.NONE,
                     -1,
-                    None)
+                    None,
+                    self.on_operation_finished,
+                    f"Удаление из кеша: {relative_path}"
+                )
 
             except Exception as e:
                 print(f"Ошибка D-Bus: {e}")
 
     def cache_choosed_directory(self, item, directories):
-        # Проходим циклом по всем выделенным объектам
         for file_info in directories:
-            # 1. Получаем объект Gio.File
             location = file_info.get_location()
             if not location:
                 continue
 
-            # 2. Получаем абсолютный путь в виде строки
             abs_path = location.get_path()
-
             if not abs_path:
                 continue
 
-            print(f"Запуск кеширования для: {abs_path}")
-
             try:
-                # 3. Вызов D-Bus метода CacheDirectory
-                # Сигнатура 's' — одна строка (путь)
-                bus.call_sync(
+                bus.call(
                     DBUS_NAME,
                     DBUS_PATH,
                     DBUS_IFACE,
@@ -118,7 +113,16 @@ class PompiliusCaching(GObject.GObject, Nautilus.MenuProvider):
                     None,
                     Gio.DBusCallFlags.NONE,
                     -1,
-                    None
+                    None,
+                    self.on_operation_finished,
+                    f"Кеширование директории: {abs_path}"
                 )
             except Exception as e:
                 print(f"Ошибка D-Bus при кешировании {abs_path}: {e}")
+
+    def on_operation_finished(self, connection, res, user_data):
+        try:
+            connection.call_finish(res)
+            print(f"Операция завершена успешно: {user_data}")
+        except Exception as e:
+            print(f"Ошибка при выполнении операции ({user_data}): {e}")
