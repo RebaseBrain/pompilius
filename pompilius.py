@@ -10,7 +10,6 @@ from urllib.parse import unquote, urlparse
 EXTENSION_DIR = os.path.dirname(os.path.abspath(__file__))
 bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
 MAX_TIMEOUT_MS = 2**31 - 1 # Максимально возможный таймаут (около 24 дней)
-AVAILABLE_PROVIDERS = ["drive", "yandex", "iclouddrive", "mailru", "webdav"]
 
 
 _profiles_cache = None
@@ -37,51 +36,147 @@ def get_existing_profiles():
         return _profiles_cache if _profiles_cache is not None else {}
 
 
-def get_rclone_title(title: str) -> str:
-    match title:
-        case "Яндекс.Диск":
-            return "yandex"
-        case "Google Drive":
-            return "drive"
-        case "Облако@Mail.ru":
-            return "mailru"
-        case "iCloud Drive":
-            return "iclouddrive"
-        case "MEGA":
-            return "mega"
-        case "WebDAV":
-            return "webdav"
-    return "unknown"
+def get_available_providers():
+    """Запрашивает список поддерживаемых провайдеров у демона"""
+    try:
+        response_raw = bus.call_sync(
+            'org.zbus.pompiliusd',
+            '/org/zbus/pompiliusd',
+            'org.zbus.pompiliusd',
+            'ListAvailableProviders',
+            None, None, Gio.DBusCallFlags.NONE, -1, None
+        )
+        raw_json = response_raw.unpack()[0]
+        data = json.loads(raw_json)
+        return json.loads(data.get('data', '[]'))
+    except Exception as e:
+        print(f"Ошибка при получении списка провайдеров: {e}")
+        return ["drive", "yandex", "mailru", "webdav"] # Fallback
 
+def get_rclone_title(title: str) -> str:
+    mapping = {v: k for k, v in R_MAP.items()}
+    return mapping.get(title, "unknown")
 
 def get_title_from_rclone(rclone_title: str) -> str:
-    match rclone_title:
-        case "yandex":
-            return "Яндекс.Диск"
-        case "drive":
-            return "Google Drive"
-        case "mailru":
-            return "Облако@Mail.ru"
-        case "iclouddrive":
-            return "iCloud Drive"
-        case "mega":
-            return "MEGA"
-        case "webdav":
-            return "WebDAV"
-    return "unknown"
+    return R_MAP.get(rclone_title, rclone_title.capitalize())
+
+R_MAP = {
+    "alias": "Alias",
+    "hdfs": "HDFS",
+    "local": "Локальный диск",
+    "protondrive": "Proton Drive",
+    "storj": "Storj",
+    "tardigrade": "Tardigrade",
+    "cloudinary": "Cloudinary",
+    "doi": "Digital Ocean Spaces",
+    "fichier": "1Fichier",
+    "filelu": "FileLu",
+    "filescom": "Files.com",
+    "ftp": "FTP",
+    "http": "HTTP",
+    "iclouddrive": "iCloud Drive",
+    "imagekit": "ImageKit",
+    "internetarchive": "Internet Archive",
+    "koofr": "Koofr",
+    "linkbox": "Linkbox",
+    "mega": "Mega",
+    "opendrive": "OpenDrive",
+    "pixeldrain": "PixelDrain",
+    "seafile": "Seafile",
+    "sftp": "SFTP",
+    "sia": "Sia",
+    "smb": "SMB / CIFS",
+    "ulozto": "Uloz.to",
+    "uptobox": "Uptobox",
+    "azurefiles": "Azure Files",
+    "crypt": "Шифрованный диск",
+    "gofile": "GoFile",
+    "memory": "RAM диск",
+    "netstorage": "Akamai NetStorage",
+    "qingstor": "QingStor",
+    "webdav": "WebDAV",
+    "filefabric": "Storage Made Easy",
+    "azureblob": "Azure Blob Storage",
+    "quatrix": "Quatrix",
+    "b2": "Backblaze B2",
+    "cache": "Кеш",
+    "chunker": "Chunker",
+    "combine": "Combine",
+    "hasher": "Hasher",
+    "oracleobjectstorage": "Oracle Object Storage",
+    "s3": "Amazon S3",
+    "sugarsync": "SugarSync",
+    "swift": "OpenStack Swift",
+    "union": "Union",
+    "compress": "Сжатие",
+    "dropbox": "Dropbox",
+    "google photos": "Google Photos",
+    "hidrive": "HiDrive",
+    "jottacloud": "Jottacloud",
+    "mailru": "Облако@Mail.ru",
+    "onedrive": "OneDrive",
+    "pcloud": "pCloud",
+    "pikpak": "PikPak",
+    "premiumizeme": "Premiumize.me",
+    "putio": "Put.io",
+    "sharefile": "Citrix ShareFile",
+    "yandex": "Яндекс.Диск",
+    "zoho": "Zoho WorkDrive",
+    "box": "Box",
+    "archive": "Archive",
+    "drive": "Google Drive",
+    "google cloud storage": "Google Cloud Storage"
+}
+
 
 
 def get_logo_path_from_rclone(rclone_title: str) -> str:
-    match rclone_title:
-        case "yandex":
-            return "./static/yandex-disk-logo.png"
-        case "drive":
-            return "./static/google-drive-logo.png"
-        case "iclouddrive":
-            return "./static/i-cloud-logo.svg"
-        case "mailru":
-            return "./static/mail-ru-cloud.png"
-    return "unknown"
+    logo_map = {
+        "drive": "google-drive-logo.png",
+        "yandex": "yandex-disk-logo.png",
+        "iclouddrive": "i-cloud-logo.svg",
+        "mailru": "mail-ru-logo.svg",
+        "dropbox": "dropbox-logo.svg",
+        "onedrive": "onedrive-logo.webp",
+        "mega": "mega-logo.svg",
+        "pcloud": "pcloud-logo.svg",
+        "box": "box-logo.svg",
+        "s3": "amazon.png",
+        "imagekit": "imagekit-logo.png",
+        "swift": "openstack-logo.svg",
+        "azurefiles": "azure-logo.svg",
+        "azureblob": "azure-logo.svg",
+        "b2": "backblaze-logo.svg",
+        "protondrive": "proton-logo.svg",
+        "google cloud storage": "google-cloud-storage.svg",
+        "google photos": "google-photos-logo.png",
+        "zoho": "zoho-logo.svg",
+        "koofr": "koofr-logo.svg",
+        "putio": "put-io-logo.svg",
+        "seafile": "seafile-logo.png",
+        "storj": "storj-logo.svg",
+        "selectel": "selectel.svg",
+        "sftp": "openssh-logo.png",
+        "webdav": "webdav-logo.jpg",
+        "smb": "samba-logo.svg",
+    }
+    
+    if rclone_title in logo_map:
+        return f"./static/{logo_map[rclone_title]}"
+    
+    protocol_icons = {
+        "ftp": "network-server-symbolic",
+        "sftp": "network-server-symbolic",
+        "webdav": "webdav-logo.png",
+        "smb": "network-workgroup-symbolic",
+        "http": "text-html-symbolic",
+        "local": "drive-harddisk-symbolic",
+        "crypt": "channel-insecure-symbolic",
+        "cache": "media-flash-symbolic",
+        "compress": "package-x-generic-symbolic"
+    }
+    
+    return protocol_icons.get(rclone_title, "folder-remote-symbolic")
 
 
 class Provider:
@@ -140,137 +235,19 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         dialog.show()
 
     def menu_activate(self, menu):
-        dialog = Gtk.MessageDialog(
-            transient_for=None,
-            modal=True,
-            message_type=Gtk.MessageType.QUESTION,
-            text="Настройка удалённого хранилища",
-            secondary_text="Укажите профиль для загрузки"
-        )
-        dialog.add_button("Создать профиль", 1)
-        dialog.add_button("Использовать существующий профиль", 2)
-        dialog.add_button("Отмена", Gtk.ResponseType.CANCEL)
+        self.show_profiles()
 
-        def on_response(d, response_id):
-            if response_id == 1:
-                self.create_new_profile()
-            elif response_id == 2:
-                self.show_profiles()
-            d.destroy()
-
-        dialog.connect("response", on_response)
-        dialog.show()
-
-    def create_new_profile(self):
-        from providers_dialog import ProvidersDialog
-        self.dialog = ProvidersDialog(self)
-        self.dialog.present()
-
-    def on_company_clicked(self, flowbox, child, dialog):
-        rclone_name = child.rclone_title
+    def create_new_profile(self, refresh_callback=None, parent_window=None):
+        from add_profile_dialog import AddProfileDialog
+        # Если родительское окно не передано, пытаемся найти активное
+        if not parent_window:
+            for window in Gtk.Window.list_toplevels():
+                if window.get_visible():
+                    parent_window = window
+                    break
         
-        # Загружаем настройки провайдера асинхронно перед открытием диалога ввода
-        bus.call(
-            'org.zbus.pompiliusd',
-            '/org/zbus/pompiliusd',
-            'org.zbus.pompiliusd',
-            'GetProviderOptions',
-            GLib.Variant('(s)', (rclone_name,)),
-            None,
-            Gio.DBusCallFlags.NONE,
-            -1,
-            None,
-            self.on_provider_options_received,
-            (rclone_name, dialog)
-        )
-
-    def on_provider_options_received(self, connection, res, user_data):
-        rclone_name, parent_dialog = user_data
-        try:
-            raw_response = connection.call_finish(res)
-            raw_json = raw_response.unpack()[0]
-            response = json.loads(raw_json)
-            temp_list = json.loads(response['data'])
-            settings_list = {opt['Name']: opt for opt in temp_list}
-            
-            provider = Provider(rclone_name)
-            provider.settings_list = settings_list
-            
-            self.show_profile_input_dialog(provider, parent_dialog)
-        except Exception as e:
-            print(f"Ошибка при получении опций провайдера: {e}")
-
-    def show_profile_input_dialog(self, provider, parent_dialog):
-        input_dialog = Gtk.Window(title=f"Настройка {provider.title}", modal=True)
-        input_dialog.set_default_size(350, -1)
-
-        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        set_margins(vbox, 15)
-
-        vbox.append(Gtk.Label(label="Название профиля", xalign=0))
-        entry_profile_name = Gtk.Entry()
-        vbox.append(entry_profile_name)
-
-        entries_map = {}
-        for name, info in provider.settings_list.items():
-            vbox.append(Gtk.Label(label=name, xalign=0))
-            entry = Gtk.Entry()
-            if "password" in name.lower() or "secret" in name.lower():
-                entry.set_visibility(False)
-            vbox.append(entry)
-            entries_map[name] = entry
-
-        btn_create = Gtk.Button(label="Создать и привязать")
-        btn_create.add_css_class("suggested-action")
-        btn_create.connect("clicked", self.create_profile_clicked, input_dialog, provider.rclone_title, entry_profile_name, entries_map, provider.settings_list)
-
-        vbox.append(btn_create)
-        input_dialog.set_child(vbox)
-        input_dialog.present()
-        parent_dialog.destroy()
-
-    def create_profile_clicked(self, button, input_dialog, rclone_name, entry_profile_name, entries_map, settings_map):
-        profile_title = entry_profile_name.get_text().strip()
-        profiles = get_existing_profiles()
-        if profile_title in profiles:
-            self.show_error_dialog(input_dialog, "Профиль уже существует", f"Профиль '{profile_title}' уже используется в: {profiles[profile_title]}")
-            return
-
-        button.set_sensitive(False)
-        button.set_label("Создание...")
-
-        result_params = {key: entry.get_text() for key, entry in entries_map.items()}
-        try:
-            params_json_string = json.dumps(result_params)
-            bus.call(
-                'org.zbus.pompiliusd',
-                '/org/zbus/pompiliusd',
-                'org.zbus.pompiliusd',
-                'CreateProfile',
-                GLib.Variant('(sss)', (profile_title, rclone_name, params_json_string)),
-                None,
-                Gio.DBusCallFlags.NONE,
-                MAX_TIMEOUT_MS,
-                None,
-                self.on_profile_created,
-                (input_dialog, button)
-            )
-        except Exception as e:
-            button.set_sensitive(True)
-            button.set_label("Создать и привязать")
-            print(f"Ошибка D-Bus: {e}")
-            self.show_error_dialog(input_dialog, "Ошибка D-Bus", str(e))
-
-    def on_profile_created(self, connection, res, user_data):
-        input_dialog, button = user_data
-        try:
-            connection.call_finish(res)
-            input_dialog.destroy()
-        except Exception as e:
-            button.set_sensitive(True)
-            button.set_label("Создать и привязать")
-            print(f"Ошибка при создании профиля: {e}")
-            self.show_error_dialog(input_dialog, "Ошибка при создании", str(e))
+        prov_dialog = AddProfileDialog(self, transient_for=parent_window, refresh_callback=refresh_callback)
+        prov_dialog.present()
 
     def create_company_widget(self, name, logo):
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
@@ -283,7 +260,7 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         vbox.append(label)
         return vbox
 
-    def create_profile_table_row(self, profile: Profile):
+    def create_profile_table_row(self, profile: Profile, delete_callback=None):
         row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
         set_margins(row_box, 10)
 
@@ -322,7 +299,10 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         row.set_child(row_box)
         row.profile_title = profile.title
 
-        delete_button.connect("clicked", self.delete_profile, profile.title)
+        if delete_callback:
+            delete_button.connect("clicked", delete_callback, profile.title, row)
+        else:
+            delete_button.connect("clicked", self.delete_profile, profile.title)
         return row
 
     def delete_profile(self, button, profile_title):
