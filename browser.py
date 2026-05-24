@@ -1,6 +1,4 @@
 import gi
-gi.require_version('Gtk', '4.0')
-gi.require_version('Notify', '0.7')
 import webbrowser
 import os
 import json
@@ -8,6 +6,8 @@ from gi.repository import Nautilus, GObject, Gio, GLib, Notify
 from urllib.parse import unquote, urlparse
 from pompilius import DBUS_IFACE, DBUS_NAME, DBUS_PATH, get_existing_profiles
 
+gi.require_version('Gtk', '4.0')
+gi.require_version('Notify', '0.7')
 
 bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
 
