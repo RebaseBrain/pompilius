@@ -5,15 +5,21 @@ import os
 import json
 from urllib.parse import unquote, urlparse
 
+from constants import (
+    DBUS_IFACE,
+    DBUS_NAME,
+    DBUS_PATH,
+    EXTENSION_DIR,
+    LOGO_MAP,
+    MAX_TIMEOUT_MS,
+    PROTOCOL_ICONS,
+    R_MAP,
+)
+
 gi.require_version("Gtk", "4.0")
 gi.require_version("Notify", "0.7")
 
-DBUS_NAME = "org.zbus.pompiliusd"
-DBUS_PATH = "/org/zbus/pompiliusd"
-DBUS_IFACE = "org.zbus.pompiliusd"
-EXTENSION_DIR = os.path.dirname(os.path.abspath(__file__))
 bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-MAX_TIMEOUT_MS = 2**31 - 1  # Максимально возможный таймаут (около 24 дней)
 
 
 _profiles_cache = None
@@ -72,122 +78,11 @@ def get_title_from_rclone(rclone_title: str) -> str:
     return R_MAP.get(rclone_title, rclone_title.capitalize())
 
 
-R_MAP = {
-    "alias": "Alias",
-    "hdfs": "HDFS",
-    "local": "Локальный диск",
-    "protondrive": "Proton Drive",
-    "storj": "Storj",
-    "tardigrade": "Tardigrade",
-    "cloudinary": "Cloudinary",
-    "doi": "Digital Ocean Spaces",
-    "fichier": "1Fichier",
-    "filelu": "FileLu",
-    "filescom": "Files.com",
-    "ftp": "FTP",
-    "http": "HTTP",
-    "iclouddrive": "iCloud Drive",
-    "imagekit": "ImageKit",
-    "internetarchive": "Internet Archive",
-    "koofr": "Koofr",
-    "linkbox": "Linkbox",
-    "mega": "Mega",
-    "opendrive": "OpenDrive",
-    "pixeldrain": "PixelDrain",
-    "seafile": "Seafile",
-    "sftp": "SFTP",
-    "sia": "Sia",
-    "smb": "SMB / CIFS",
-    "ulozto": "Uloz.to",
-    "uptobox": "Uptobox",
-    "azurefiles": "Azure Files",
-    "crypt": "Шифрованный диск",
-    "gofile": "GoFile",
-    "memory": "RAM диск",
-    "netstorage": "Akamai NetStorage",
-    "qingstor": "QingStor",
-    "webdav": "WebDAV",
-    "filefabric": "Storage Made Easy",
-    "azureblob": "Azure Blob Storage",
-    "quatrix": "Quatrix",
-    "b2": "Backblaze B2",
-    "cache": "Кеш",
-    "chunker": "Chunker",
-    "combine": "Combine",
-    "hasher": "Hasher",
-    "oracleobjectstorage": "Oracle Object Storage",
-    "s3": "Amazon S3",
-    "sugarsync": "SugarSync",
-    "swift": "OpenStack Swift",
-    "union": "Union",
-    "compress": "Сжатие",
-    "dropbox": "Dropbox",
-    "google photos": "Google Photos",
-    "hidrive": "HiDrive",
-    "jottacloud": "Jottacloud",
-    "mailru": "Облако@Mail.ru",
-    "onedrive": "OneDrive",
-    "pcloud": "pCloud",
-    "pikpak": "PikPak",
-    "premiumizeme": "Premiumize.me",
-    "putio": "Put.io",
-    "sharefile": "Citrix ShareFile",
-    "yandex": "Яндекс.Диск",
-    "zoho": "Zoho WorkDrive",
-    "box": "Box",
-    "archive": "Archive",
-    "drive": "Google Drive",
-    "google cloud storage": "Google Cloud Storage",
-}
-
-
 def get_logo_path_from_rclone(rclone_title: str) -> str:
-    logo_map = {
-        "drive": "google-drive-logo.png",
-        "yandex": "yandex-disk-logo.png",
-        "iclouddrive": "i-cloud-logo.svg",
-        "mailru": "mail-ru-logo.svg",
-        "dropbox": "dropbox-logo.svg",
-        "onedrive": "onedrive-logo.webp",
-        "mega": "mega-logo.svg",
-        "pcloud": "pcloud-logo.svg",
-        "box": "box-logo.svg",
-        "s3": "amazon.png",
-        "imagekit": "imagekit-logo.png",
-        "swift": "openstack-logo.svg",
-        "azurefiles": "azure-logo.svg",
-        "azureblob": "azure-logo.svg",
-        "b2": "backblaze-logo.svg",
-        "protondrive": "proton-logo.svg",
-        "google cloud storage": "google-cloud-storage.svg",
-        "google photos": "google-photos-logo.png",
-        "zoho": "zoho-logo.svg",
-        "koofr": "koofr-logo.svg",
-        "putio": "put-io-logo.svg",
-        "seafile": "seafile-logo.png",
-        "storj": "storj-logo.svg",
-        "selectel": "selectel.svg",
-        "sftp": "openssh-logo.png",
-        "webdav": "webdav-logo.jpg",
-        "smb": "samba-logo.svg",
-    }
+    if rclone_title in LOGO_MAP:
+        return f"./static/{LOGO_MAP[rclone_title]}"
 
-    if rclone_title in logo_map:
-        return f"./static/{logo_map[rclone_title]}"
-
-    protocol_icons = {
-        "ftp": "network-server-symbolic",
-        "sftp": "network-server-symbolic",
-        "webdav": "webdav-logo.png",
-        "smb": "network-workgroup-symbolic",
-        "http": "text-html-symbolic",
-        "local": "drive-harddisk-symbolic",
-        "crypt": "channel-insecure-symbolic",
-        "cache": "media-flash-symbolic",
-        "compress": "package-x-generic-symbolic",
-    }
-
-    return protocol_icons.get(rclone_title, "folder-remote-symbolic")
+    return PROTOCOL_ICONS.get(rclone_title, "folder-remote-symbolic")
 
 
 class Provider:

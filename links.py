@@ -3,7 +3,8 @@ from gi.repository import Nautilus, GObject, Gio, GLib, Gdk, Notify
 import json
 from urllib.parse import unquote, urlparse
 import os
-from pompilius import DBUS_IFACE, DBUS_NAME, DBUS_PATH, get_existing_profiles
+from constants import DBUS_NAME, DBUS_PATH, DBUS_IFACE
+from pompilius import get_existing_profiles
 
 gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk", "4.0")

@@ -1,13 +1,14 @@
 import gi
 from gi.repository import Nautilus, GObject, Gio, GLib
 import os
-from pompilius import DBUS_IFACE, DBUS_NAME, DBUS_PATH, get_existing_profiles
+from pompilius import get_existing_profiles
+from constants import DBUS_NAME, DBUS_PATH, DBUS_IFACE
 from urllib.parse import unquote, urlparse
 import json
 
 gi.require_version("Gtk", "4.0")
 
-# Глобальный кеш статусов: (profile, file_name) -> status_string
+# Кеш статусов: (profile, file_name) -> status_string
 STATUS_CACHE = {}
 # Множество (profile, directory_path), для которых сейчас выполняется запрос
 PENDING_DIRS = set()

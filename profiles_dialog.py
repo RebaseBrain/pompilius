@@ -1,10 +1,8 @@
 import gi
 from gi.repository import Gtk, Gio, GLib
 import json
+from constants import DBUS_NAME, DBUS_PATH, DBUS_IFACE
 from pompilius import (
-    DBUS_IFACE,
-    DBUS_NAME,
-    DBUS_PATH,
     Provider,
     Profile,
     set_margins,

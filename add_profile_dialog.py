@@ -1,13 +1,15 @@
 import gi
-from gi.repository import Gtk, GObject, Pango, Gio, GLib
-from pompilius import (
+from gi.repository import Gtk, Pango, Gio, GLib
+from constants import (
     DBUS_IFACE,
     DBUS_NAME,
     DBUS_PATH,
+    MAX_TIMEOUT_MS,
+)
+from pompilius import (
     Provider,
     get_available_providers,
     set_margins,
-    MAX_TIMEOUT_MS,
     bus,
     get_existing_profiles,
 )

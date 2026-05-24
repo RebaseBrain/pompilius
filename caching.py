@@ -1,5 +1,6 @@
 import gi
-from pompilius import DBUS_IFACE, DBUS_NAME, DBUS_PATH, get_existing_profiles
+from pompilius import get_existing_profiles
+from constants import DBUS_NAME, DBUS_PATH, DBUS_IFACE
 import os
 from gi.repository import Nautilus, GObject, Gio, GLib
 from urllib.parse import unquote, urlparse
