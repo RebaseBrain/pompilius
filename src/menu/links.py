@@ -1,13 +1,14 @@
 import gi
-gi.require_version('Gdk', '4.0')
-gi.require_version('Gtk', '4.0')
-gi.require_version('Notify', '0.7')
 from gi.repository import Nautilus, GObject, Gio, GLib, Gdk, Notify
 import json
 from urllib.parse import unquote, urlparse
 import os
-from pompilius import DBUS_IFACE, DBUS_NAME, DBUS_PATH, get_existing_profiles
+from constants import DBUS_NAME, DBUS_PATH, DBUS_IFACE
+from pompilius import get_existing_profiles
 
+gi.require_version("Gdk", "4.0")
+gi.require_version("Gtk", "4.0")
+gi.require_version("Notify", "0.7")
 
 bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
 
@@ -41,10 +42,7 @@ class PompiliusLinks(GObject.GObject, Nautilus.MenuProvider):
         profiles = get_existing_profiles()
 
         show_menu = False
-        profile = {
-            "title": "",
-            "mount_root": ""
-        }
+        profile = {"title": "", "mount_root": ""}
         for file in files:
             uri = file.get_uri()
             file_path = unquote(urlparse(uri).path)
@@ -65,7 +63,7 @@ class PompiliusLinks(GObject.GObject, Nautilus.MenuProvider):
         item = Nautilus.MenuItem(
             name="Pompilius::GetLink",
             label="Получить ссылку на файл",
-            tip="Можете потом его куда-то скинуть"
+            tip="Можете потом его куда-то скинуть",
         )
 
         item.connect("activate", self.get_link, files, profile)
@@ -79,20 +77,21 @@ class PompiliusLinks(GObject.GObject, Nautilus.MenuProvider):
             absolute_path = unquote(urlparse(uri).path)
             try:
                 relative_path = os.path.relpath(
-                    absolute_path, profile["mount_root"]).replace(mock_profile, "")
+                    absolute_path, profile["mount_root"]
+                ).replace(mock_profile, "")
 
                 bus.call(
                     DBUS_NAME,
                     DBUS_PATH,
                     DBUS_IFACE,
-                    'Link',
-                    GLib.Variant('(ss)', (mock_profile, relative_path)),
+                    "Link",
+                    GLib.Variant("(ss)", (mock_profile, relative_path)),
                     None,
                     Gio.DBusCallFlags.NONE,
                     -1,
                     None,
                     self.on_link_received,
-                    None
+                    None,
                 )
             except Exception as e:
                 print(f"Ошибка D-Bus: {e}")
@@ -102,7 +101,7 @@ class PompiliusLinks(GObject.GObject, Nautilus.MenuProvider):
             result = connection.call_finish(res)
             raw_data = result.unpack()[0]
             parsed_json = json.loads(raw_data)
-            link = json.loads(parsed_json['data'])
+            link = json.loads(parsed_json["data"])
 
             display = Gdk.Display.get_default()
             clipboard = display.get_clipboard()

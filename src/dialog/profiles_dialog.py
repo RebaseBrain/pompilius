@@ -1,21 +1,34 @@
 import gi
-gi.require_version('Gtk', '4.0')
-from gi.repository import Gtk, GObject, Pango, Gio, GLib
+from gi.repository import Gtk, Gio, GLib
 import json
-import os
-from pompilius import Provider, Profile, get_existing_profiles, set_margins, MAX_TIMEOUT_MS, get_available_providers, get_title_from_rclone
+from constants import DBUS_NAME, DBUS_PATH, DBUS_IFACE
+from pompilius import (
+    Provider,
+    Profile,
+    set_margins,
+    get_available_providers,
+    get_title_from_rclone,
+)
+
+gi.require_version("Gtk", "4.0")
+
 
 class ProfilesDialog(Gtk.Window):
     def __init__(self, bus, parent_extension, current_dir):
-        super().__init__(title="Управление профилями", modal=True, default_width=500, default_height=600)
+        super().__init__(
+            title="Управление профилями",
+            modal=True,
+            default_width=500,
+            default_height=600,
+        )
         self.bus = bus
         self.parent_ext = parent_extension
         self.current_dir = current_dir
-        
+
         self.all_profiles = []
         self.filter_text = ""
         self.filter_provider = "All"
-        
+
         self.setup_ui()
         self.load_profiles()
 
@@ -26,7 +39,7 @@ class ProfilesDialog(Gtk.Window):
 
         # Панель поиска и фильтрации
         controls_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        
+
         self.search_entry = Gtk.SearchEntry(placeholder_text="Поиск профиля...")
         self.search_entry.set_hexpand(True)
         self.search_entry.connect("search-changed", self.on_search_changed)
@@ -44,18 +57,22 @@ class ProfilesDialog(Gtk.Window):
         refresh_btn.connect("clicked", lambda b: self.load_profiles())
         controls_box.append(refresh_btn)
 
-        filter_titles = ["All"] + sorted([get_title_from_rclone(p) for p in get_available_providers()])
+        filter_titles = ["All"] + sorted(
+            [get_title_from_rclone(p) for p in get_available_providers()]
+        )
         self.provider_filter = Gtk.DropDown.new_from_strings(filter_titles)
         self.provider_filter.connect("notify::selected", self.on_filter_changed)
         controls_box.append(self.provider_filter)
-        
+
         main_box.append(controls_box)
 
         # Сортировка
         sort_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         sort_box.append(Gtk.Label(label="Сортировать по:"))
-        
-        self.sort_type = Gtk.DropDown.new_from_strings(["Имени (А-Я)", "Имени (Я-А)", "Провайдеру (А-Я)", "Провайдеру (Я-А)"])
+
+        self.sort_type = Gtk.DropDown.new_from_strings(
+            ["Имени (А-Я)", "Имени (Я-А)", "Провайдеру (А-Я)", "Провайдеру (Я-А)"]
+        )
         self.sort_type.connect("notify::selected", self.on_sort_changed)
         sort_box.append(self.sort_type)
         main_box.append(sort_box)
@@ -67,22 +84,27 @@ class ProfilesDialog(Gtk.Window):
         self.list_box.set_selection_mode(Gtk.SelectionMode.NONE)
         self.list_box.set_show_separators(True)
         self.list_box.connect("row-activated", self.on_row_activated)
-        
+
         # Настройка фильтрации и сортировки для ListBox
         self.list_box.set_filter_func(self.filter_func)
         self.list_box.set_sort_func(self.sort_func)
-        
+
         scrolled.set_child(self.list_box)
         main_box.append(scrolled)
 
     def load_profiles(self):
         self.bus.call(
-            'org.zbus.pompiliusd',
-            '/org/zbus/pompiliusd',
-            'org.zbus.pompiliusd',
-            'ListProfiles',
-            None, None, Gio.DBusCallFlags.NONE, -1, None,
-            self.on_profiles_loaded, None
+            DBUS_NAME,
+            DBUS_PATH,
+            DBUS_IFACE,
+            "ListProfiles",
+            None,
+            None,
+            Gio.DBusCallFlags.NONE,
+            -1,
+            None,
+            self.on_profiles_loaded,
+            None,
         )
 
     def on_profiles_loaded(self, connection, res, user_data):
@@ -90,12 +112,13 @@ class ProfilesDialog(Gtk.Window):
             response_raw = connection.call_finish(res)
             raw_json = response_raw.unpack()[0]
             response = json.loads(raw_json)
-            profiles_raw = json.loads(response['data'])
+            profiles_raw = json.loads(response["data"])
 
             # Очистка
             while True:
                 child = self.list_box.get_first_child()
-                if not child: break
+                if not child:
+                    break
                 self.list_box.remove(child)
 
             self.all_profiles = []
@@ -103,10 +126,12 @@ class ProfilesDialog(Gtk.Window):
                 profile = Profile(name, Provider(provider_name))
                 self.all_profiles.append(profile)
                 # Передаем наш обработчик удаления
-                row = self.parent_ext.create_profile_table_row(profile, delete_callback=self.delete_profile_handler)
+                row = self.parent_ext.create_profile_table_row(
+                    profile, delete_callback=self.delete_profile_handler
+                )
                 row._profile_data = profile
                 self.list_box.append(row)
-            
+
             self.list_box.invalidate_filter()
             self.list_box.invalidate_sort()
         except Exception as e:
@@ -115,20 +140,20 @@ class ProfilesDialog(Gtk.Window):
     def delete_profile_handler(self, button, profile_title, row):
         # Сразу убираем из UI (оптимистичное удаление)
         self.list_box.remove(row)
-        
+
         # Вызываем D-Bus
         self.bus.call(
-            'org.zbus.pompiliusd',
-            '/org/zbus/pompiliusd',
-            'org.zbus.pompiliusd',
-            'DeleteProfile',
-            GLib.Variant('(s)', (profile_title,)),
+            DBUS_NAME,
+            DBUS_PATH,
+            DBUS_IFACE,
+            "DeleteProfile",
+            GLib.Variant("(s)", (profile_title,)),
             None,
             Gio.DBusCallFlags.NONE,
             -1,
             None,
             self.on_profile_deleted,
-            profile_title
+            profile_title,
         )
 
     def on_profile_deleted(self, connection, res, profile_title):
@@ -153,34 +178,39 @@ class ProfilesDialog(Gtk.Window):
 
     def filter_func(self, row):
         profile = row._profile_data
-        
+
         # Фильтр по тексту
         if self.filter_text and self.filter_text not in profile.title.lower():
             return False
-            
+
         # Фильтр по провайдеру
-        if self.filter_provider != "All" and profile.provider.title != self.filter_provider:
+        if (
+            self.filter_provider != "All"
+            and profile.provider.title != self.filter_provider
+        ):
             return False
-            
+
         return True
 
     def sort_func(self, row1, row2):
         p1 = row1._profile_data
         p2 = row2._profile_data
         sort_idx = self.sort_type.get_selected()
-        
-        if sort_idx == 0: # Имя А-Я
+
+        if sort_idx == 0:  # Имя А-Я
             return 1 if p1.title.lower() > p2.title.lower() else -1
-        elif sort_idx == 1: # Имя Я-А
+        elif sort_idx == 1:  # Имя Я-А
             return -1 if p1.title.lower() > p2.title.lower() else 1
-        elif sort_idx == 2: # Провайдер А-Я
+        elif sort_idx == 2:  # Провайдер А-Я
             return 1 if p1.provider.title.lower() > p2.provider.title.lower() else -1
-        elif sort_idx == 3: # Провайдер Я-А
+        elif sort_idx == 3:  # Провайдер Я-А
             return -1 if p1.provider.title.lower() > p2.provider.title.lower() else 1
         return 0
 
     def on_add_clicked(self, button):
-        self.parent_ext.create_new_profile(refresh_callback=self.load_profiles, parent_window=self)
+        self.parent_ext.create_new_profile(
+            refresh_callback=self.load_profiles, parent_window=self
+        )
         # Не закрываем, чтобы увидеть результат обновления
 
     def on_row_activated(self, list_box, row):

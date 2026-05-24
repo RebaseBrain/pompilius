@@ -1,22 +1,30 @@
 import gi
-gi.require_version('Gtk', '4.0')
-gi.require_version('Notify', '0.7')
 from gi.repository import Nautilus, GObject, Gtk, Pango, Gio, GLib
 import tomllib
 import os
 import json
 from urllib.parse import unquote, urlparse
 
-DBUS_NAME = 'org.zbus.pompiliusd'
-DBUS_PATH = '/org/zbus/pompiliusd'
-DBUS_IFACE = 'org.zbus.pompiliusd'
-EXTENSION_DIR = os.path.dirname(os.path.abspath(__file__))
+from constants import (
+    DBUS_IFACE,
+    DBUS_NAME,
+    DBUS_PATH,
+    EXTENSION_DIR,
+    LOGO_MAP,
+    MAX_TIMEOUT_MS,
+    PROTOCOL_ICONS,
+    R_MAP,
+)
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Notify", "0.7")
+
 bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-MAX_TIMEOUT_MS = 2**31 - 1 # Максимально возможный таймаут (около 24 дней)
 
 
 _profiles_cache = None
 _profiles_cache_mtime = 0
+
 
 def get_existing_profiles():
     global _profiles_cache, _profiles_cache_mtime
@@ -43,143 +51,38 @@ def get_available_providers():
     """Запрашивает список поддерживаемых провайдеров у демона"""
     try:
         response_raw = bus.call_sync(
-            'org.zbus.pompiliusd',
-            '/org/zbus/pompiliusd',
-            'org.zbus.pompiliusd',
-            'ListAvailableProviders',
-            None, None, Gio.DBusCallFlags.NONE, -1, None
+            DBUS_NAME,
+            DBUS_PATH,
+            DBUS_IFACE,
+            "ListAvailableProviders",
+            None,
+            None,
+            Gio.DBusCallFlags.NONE,
+            -1,
+            None,
         )
         raw_json = response_raw.unpack()[0]
         data = json.loads(raw_json)
-        return json.loads(data.get('data', '[]'))
+        return json.loads(data.get("data", "[]"))
     except Exception as e:
         print(f"Ошибка при получении списка провайдеров: {e}")
-        return ["drive", "yandex", "mailru", "webdav"] # Fallback
+        return ["drive", "yandex", "mailru", "webdav"]  # Fallback
+
 
 def get_rclone_title(title: str) -> str:
     mapping = {v: k for k, v in R_MAP.items()}
     return mapping.get(title, "unknown")
 
+
 def get_title_from_rclone(rclone_title: str) -> str:
     return R_MAP.get(rclone_title, rclone_title.capitalize())
 
-R_MAP = {
-    "alias": "Alias",
-    "hdfs": "HDFS",
-    "local": "Локальный диск",
-    "protondrive": "Proton Drive",
-    "storj": "Storj",
-    "tardigrade": "Tardigrade",
-    "cloudinary": "Cloudinary",
-    "doi": "Digital Ocean Spaces",
-    "fichier": "1Fichier",
-    "filelu": "FileLu",
-    "filescom": "Files.com",
-    "ftp": "FTP",
-    "http": "HTTP",
-    "iclouddrive": "iCloud Drive",
-    "imagekit": "ImageKit",
-    "internetarchive": "Internet Archive",
-    "koofr": "Koofr",
-    "linkbox": "Linkbox",
-    "mega": "Mega",
-    "opendrive": "OpenDrive",
-    "pixeldrain": "PixelDrain",
-    "seafile": "Seafile",
-    "sftp": "SFTP",
-    "sia": "Sia",
-    "smb": "SMB / CIFS",
-    "ulozto": "Uloz.to",
-    "uptobox": "Uptobox",
-    "azurefiles": "Azure Files",
-    "crypt": "Шифрованный диск",
-    "gofile": "GoFile",
-    "memory": "RAM диск",
-    "netstorage": "Akamai NetStorage",
-    "qingstor": "QingStor",
-    "webdav": "WebDAV",
-    "filefabric": "Storage Made Easy",
-    "azureblob": "Azure Blob Storage",
-    "quatrix": "Quatrix",
-    "b2": "Backblaze B2",
-    "cache": "Кеш",
-    "chunker": "Chunker",
-    "combine": "Combine",
-    "hasher": "Hasher",
-    "oracleobjectstorage": "Oracle Object Storage",
-    "s3": "Amazon S3",
-    "sugarsync": "SugarSync",
-    "swift": "OpenStack Swift",
-    "union": "Union",
-    "compress": "Сжатие",
-    "dropbox": "Dropbox",
-    "google photos": "Google Photos",
-    "hidrive": "HiDrive",
-    "jottacloud": "Jottacloud",
-    "mailru": "Облако@Mail.ru",
-    "onedrive": "OneDrive",
-    "pcloud": "pCloud",
-    "pikpak": "PikPak",
-    "premiumizeme": "Premiumize.me",
-    "putio": "Put.io",
-    "sharefile": "Citrix ShareFile",
-    "yandex": "Яндекс.Диск",
-    "zoho": "Zoho WorkDrive",
-    "box": "Box",
-    "archive": "Archive",
-    "drive": "Google Drive",
-    "google cloud storage": "Google Cloud Storage"
-}
-
-
 
 def get_logo_path_from_rclone(rclone_title: str) -> str:
-    logo_map = {
-        "drive": "google-drive-logo.png",
-        "yandex": "yandex-disk-logo.png",
-        "iclouddrive": "i-cloud-logo.svg",
-        "mailru": "mail-ru-logo.svg",
-        "dropbox": "dropbox-logo.svg",
-        "onedrive": "onedrive-logo.webp",
-        "mega": "mega-logo.svg",
-        "pcloud": "pcloud-logo.svg",
-        "box": "box-logo.svg",
-        "s3": "amazon.png",
-        "imagekit": "imagekit-logo.png",
-        "swift": "openstack-logo.svg",
-        "azurefiles": "azure-logo.svg",
-        "azureblob": "azure-logo.svg",
-        "b2": "backblaze-logo.svg",
-        "protondrive": "proton-logo.svg",
-        "google cloud storage": "google-cloud-storage.svg",
-        "google photos": "google-photos-logo.png",
-        "zoho": "zoho-logo.svg",
-        "koofr": "koofr-logo.svg",
-        "putio": "put-io-logo.svg",
-        "seafile": "seafile-logo.png",
-        "storj": "storj-logo.svg",
-        "selectel": "selectel.svg",
-        "sftp": "openssh-logo.png",
-        "webdav": "webdav-logo.jpg",
-        "smb": "samba-logo.svg",
-    }
+    if rclone_title in LOGO_MAP:
+        return f"./static/{LOGO_MAP[rclone_title]}"
 
-    if rclone_title in logo_map:
-        return f"./static/{logo_map[rclone_title]}"
-
-    protocol_icons = {
-        "ftp": "network-server-symbolic",
-        "sftp": "network-server-symbolic",
-        "webdav": "webdav-logo.png",
-        "smb": "network-workgroup-symbolic",
-        "http": "text-html-symbolic",
-        "local": "drive-harddisk-symbolic",
-        "crypt": "channel-insecure-symbolic",
-        "cache": "media-flash-symbolic",
-        "compress": "package-x-generic-symbolic"
-    }
-
-    return protocol_icons.get(rclone_title, "folder-remote-symbolic")
+    return PROTOCOL_ICONS.get(rclone_title, "folder-remote-symbolic")
 
 
 class Provider:
@@ -218,11 +121,11 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
     def get_background_items(self, folder):
         self.current_dir = unquote(urlparse(folder.get_uri()).path)
         item = Nautilus.MenuItem(
-            name='Pompilius::AddRemote',
-            label='Добавить удалённое хранилище',
-            tip='Добавить хранилище в текущую папку'
+            name="Pompilius::AddRemote",
+            label="Добавить удалённое хранилище",
+            tip="Добавить хранилище в текущую папку",
         )
-        item.connect('activate', self.menu_activate)
+        item.connect("activate", self.menu_activate)
         return [item]
 
     def show_error_dialog(self, parent, title, message):
@@ -232,7 +135,7 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
             message_type=Gtk.MessageType.ERROR,
             buttons=Gtk.ButtonsType.OK,
             text=title,
-            secondary_text=message
+            secondary_text=message,
         )
         dialog.connect("response", lambda d, r: d.destroy())
         dialog.show()
@@ -242,6 +145,7 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
 
     def create_new_profile(self, refresh_callback=None, parent_window=None):
         from add_profile_dialog import AddProfileDialog
+
         # Если родительское окно не передано, пытаемся найти активное
         if not parent_window:
             for window in Gtk.Window.list_toplevels():
@@ -249,7 +153,9 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
                     parent_window = window
                     break
 
-        prov_dialog = AddProfileDialog(self, transient_for=parent_window, refresh_callback=refresh_callback)
+        prov_dialog = AddProfileDialog(
+            self, transient_for=parent_window, refresh_callback=refresh_callback
+        )
         prov_dialog.present()
 
     def create_company_widget(self, name, logo):
@@ -310,17 +216,17 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
 
     def delete_profile(self, button, profile_title):
         bus.call(
-            DBUS_NAME,           # Bus name
-            DBUS_PATH,          # Object path
-            DBUS_IFACE,           # Interface name
-            'DeleteProfile',
-            GLib.Variant('(s)', (profile_title,)),
+            DBUS_NAME,  # Bus name
+            DBUS_PATH,  # Object path
+            DBUS_IFACE,  # Interface name
+            "DeleteProfile",
+            GLib.Variant("(s)", (profile_title,)),
             None,
             Gio.DBusCallFlags.NONE,
             -1,
             None,
             self.on_profile_deleted,
-            None
+            None,
         )
 
     def on_profile_deleted(self, connection, res, user_data):
@@ -332,12 +238,15 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
 
     def show_profiles(self):
         from profiles_dialog import ProfilesDialog
+
         self.dialog = ProfilesDialog(bus, self, self.current_dir)
         self.dialog.present()
 
     def mount_directory(self, list_box, row):
-        title = getattr(row, 'profile_title', "Неизвестно")
-        mount_params_dialog = Gtk.Window(title=f"Параметры монтирования: {title}", modal=True, default_width=300)
+        title = getattr(row, "profile_title", "Неизвестно")
+        mount_params_dialog = Gtk.Window(
+            title=f"Параметры монтирования: {title}", modal=True, default_width=300
+        )
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         set_margins(vbox, 15)
         mount_params_dialog.set_child(vbox)
@@ -354,7 +263,14 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
 
         btn_confirm = Gtk.Button(label="Подключить")
         btn_confirm.add_css_class("suggested-action")
-        btn_confirm.connect("clicked", self.execute_mount, title, entry_size, entry_time, mount_params_dialog)
+        btn_confirm.connect(
+            "clicked",
+            self.execute_mount,
+            title,
+            entry_size,
+            entry_time,
+            mount_params_dialog,
+        )
 
         vbox.append(btn_confirm)
         mount_params_dialog.present()
@@ -368,17 +284,17 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
 
         try:
             bus.call(
-                DBUS_NAME,           # Bus name
-                DBUS_PATH,          # Object path
-                DBUS_IFACE,           # Interface name
-                'Mount',
-                GLib.Variant('(ssss)', (title, self.current_dir, max_size, max_time)),
+                DBUS_NAME,  # Bus name
+                DBUS_PATH,  # Object path
+                DBUS_IFACE,  # Interface name
+                "Mount",
+                GLib.Variant("(ssss)", (title, self.current_dir, max_size, max_time)),
                 None,
                 Gio.DBusCallFlags.NONE,
                 MAX_TIMEOUT_MS,
                 None,
                 self.on_mount_finished,
-                (current_dialog, button)
+                (current_dialog, button),
             )
         except Exception as e:
             button.set_sensitive(True)

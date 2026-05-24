@@ -1,17 +1,20 @@
 import gi
-gi.require_version('Gtk', '4.0')
 from gi.repository import Nautilus, GObject, Gio, GLib
 import os
 from pompilius import get_existing_profiles
+from constants import DBUS_NAME, DBUS_PATH, DBUS_IFACE
 from urllib.parse import unquote, urlparse
 import json
 
-# Глобальный кеш статусов: (profile, file_name) -> status_string
+gi.require_version("Gtk", "4.0")
+
+# Кеш статусов: (profile, file_name) -> status_string
 STATUS_CACHE = {}
 # Множество (profile, directory_path), для которых сейчас выполняется запрос
 PENDING_DIRS = set()
 
 bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+
 
 class PompiliusIconOverlay(GObject.GObject, Nautilus.InfoProvider):
     def __init__(self):
@@ -39,8 +42,8 @@ class PompiliusIconOverlay(GObject.GObject, Nautilus.InfoProvider):
         # Сохраняем ссылку на объект для refresh_all
         self.active_files[uri] = file_info
 
-        # Если это директория, иконки статуса обычно не ставятся,                                                                                                                                                                                                                
-        # но мы запоминаем её как текущую   
+        # Если это директория, иконки статуса обычно не ставятся,
+        # но мы запоминаем её как текущую
         if file_info.is_directory():
             self.current_dir = file_path
             return
@@ -67,7 +70,7 @@ class PompiliusIconOverlay(GObject.GObject, Nautilus.InfoProvider):
         # 2. Если статус есть в кэше — накладываем эмблему сразу
         if cache_key in STATUS_CACHE:
             self.apply_status_emblem(file_info, STATUS_CACHE[cache_key])
-        
+
         # 3. Если для этой папки еще нет активного запроса — запускаем обновление
         if (active_profile_title, current_dir) not in PENDING_DIRS:
             self.request_status_update(active_profile_title, current_dir)
@@ -76,39 +79,40 @@ class PompiliusIconOverlay(GObject.GObject, Nautilus.InfoProvider):
         mapping = {
             "CACHED": "document-save",
             "SYNCING": "network-receive",
-            "NOT_CACHED": "network-wireless"
+            "NOT_CACHED": "network-wireless",
         }
         icon = mapping.get(status_str)
         if icon:
-            file_info.add_string_attribute('overlay_icons', icon)
+            file_info.add_string_attribute("overlay_icons", icon)
             file_info.add_emblem(icon)
 
     def request_status_update(self, profile, directory):
         PENDING_DIRS.add((profile, directory))
-        
+
         try:
             # Получаем список файлов для запроса
             all_files_in_dir = [
-                f for f in os.listdir(directory)
+                f
+                for f in os.listdir(directory)
                 if os.path.isfile(os.path.join(directory, f))
             ]
-            
+
             if not all_files_in_dir:
                 PENDING_DIRS.discard((profile, directory))
                 return
 
             bus.call(
-                'org.zbus.pompiliusd',
-                '/org/zbus/pompiliusd',
-                'org.zbus.pompiliusd',
-                'GetFilesStatus',
-                GLib.Variant('(sas)', (profile, all_files_in_dir)),
+                DBUS_NAME,
+                DBUS_PATH,
+                DBUS_IFACE,
+                "GetFilesStatus",
+                GLib.Variant("(sas)", (profile, all_files_in_dir)),
                 None,
                 Gio.DBusCallFlags.NONE,
                 -1,
                 None,
                 self.on_status_received,
-                (profile, directory)
+                (profile, directory),
             )
         except Exception as e:
             print(f"Ошибка при запросе статусов: {e}")
@@ -119,11 +123,11 @@ class PompiliusIconOverlay(GObject.GObject, Nautilus.InfoProvider):
         try:
             raw_response = connection.call_finish(res)
             outer_data = json.loads(raw_response.unpack()[0])
-            status_map = json.loads(outer_data.get('data', '{}'))
-            
+            status_map = json.loads(outer_data.get("data", "{}"))
+
             for f_name, status in status_map.items():
                 STATUS_CACHE[(profile, f_name)] = status
-                
+
             # Инвалидируем информацию для всех файлов в этой директории, чтобы Nautilus их перерисовал
             for uri, file_info in list(self.active_files.items()):
                 file_path = unquote(urlparse(uri).path)
@@ -132,7 +136,7 @@ class PompiliusIconOverlay(GObject.GObject, Nautilus.InfoProvider):
                         file_info.invalidate_extension_info()
                     except:
                         self.active_files.pop(uri, None)
-                        
+
         except Exception as e:
             print(f"Ошибка в on_status_received: {e}")
         finally:
