@@ -1,5 +1,9 @@
-import json
+import gi
+gi.require_version('Gdk', '4.0')
+gi.require_version('Gtk', '4.0')
+gi.require_version('Notify', '0.7')
 from gi.repository import Nautilus, GObject, Gio, GLib, Gdk, Notify
+import json
 from urllib.parse import unquote, urlparse
 import os
 from pompilius import DBUS_IFACE, DBUS_NAME, DBUS_PATH, get_existing_profiles
