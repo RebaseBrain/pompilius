@@ -7,6 +7,9 @@ import os
 import json
 from urllib.parse import unquote, urlparse
 
+DBUS_NAME = 'org.zbus.pompiliusd'
+DBUS_PATH = '/org/zbus/pompiliusd'
+DBUS_IFACE = 'org.zbus.pompiliusd'
 EXTENSION_DIR = os.path.dirname(os.path.abspath(__file__))
 bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
 MAX_TIMEOUT_MS = 2**31 - 1 # Максимально возможный таймаут (около 24 дней)
@@ -160,10 +163,10 @@ def get_logo_path_from_rclone(rclone_title: str) -> str:
         "webdav": "webdav-logo.jpg",
         "smb": "samba-logo.svg",
     }
-    
+
     if rclone_title in logo_map:
         return f"./static/{logo_map[rclone_title]}"
-    
+
     protocol_icons = {
         "ftp": "network-server-symbolic",
         "sftp": "network-server-symbolic",
@@ -175,7 +178,7 @@ def get_logo_path_from_rclone(rclone_title: str) -> str:
         "cache": "media-flash-symbolic",
         "compress": "package-x-generic-symbolic"
     }
-    
+
     return protocol_icons.get(rclone_title, "folder-remote-symbolic")
 
 
@@ -245,7 +248,7 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
                 if window.get_visible():
                     parent_window = window
                     break
-        
+
         prov_dialog = AddProfileDialog(self, transient_for=parent_window, refresh_callback=refresh_callback)
         prov_dialog.present()
 
@@ -307,9 +310,9 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
 
     def delete_profile(self, button, profile_title):
         bus.call(
-            'org.zbus.pompiliusd',
-            '/org/zbus/pompiliusd',
-            'org.zbus.pompiliusd',
+            DBUS_NAME,           # Bus name
+            DBUS_PATH,          # Object path
+            DBUS_IFACE,           # Interface name
             'DeleteProfile',
             GLib.Variant('(s)', (profile_title,)),
             None,
@@ -365,9 +368,9 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
 
         try:
             bus.call(
-                'org.zbus.pompiliusd',
-                '/org/zbus/pompiliusd',
-                'org.zbus.pompiliusd',
+                DBUS_NAME,           # Bus name
+                DBUS_PATH,          # Object path
+                DBUS_IFACE,           # Interface name
                 'Mount',
                 GLib.Variant('(ssss)', (title, self.current_dir, max_size, max_time)),
                 None,

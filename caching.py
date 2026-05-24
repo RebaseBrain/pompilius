@@ -1,6 +1,6 @@
 import gi
 gi.require_version('Gtk', '4.0')
-from pompilius import get_existing_profiles
+from pompilius import DBUS_IFACE, DBUS_NAME, DBUS_PATH, get_existing_profiles
 import os
 from gi.repository import Nautilus, GObject, Gio, GLib
 
@@ -77,11 +77,11 @@ class PompiliusCaching(GObject.GObject, Nautilus.MenuProvider):
             try:
                 relative_path = os.path.relpath(
                     absolute_path, profile["mount_root"]).replace(mock_profile, "").lstrip(os.sep)
-                
+
                 bus.call(
-                    'org.zbus.pompiliusd',
-                    '/org/zbus/pompiliusd',
-                    'org.zbus.pompiliusd',
+                    DBUS_NAME,
+                    DBUS_PATH,
+                    DBUS_IFACE,
                     'DeleteCachePath',
                     GLib.Variant('(ss)', (mock_profile, relative_path)),
                     None,
@@ -107,9 +107,9 @@ class PompiliusCaching(GObject.GObject, Nautilus.MenuProvider):
 
             try:
                 bus.call(
-                    'org.zbus.pompiliusd',
-                    '/org/zbus/pompiliusd',
-                    'org.zbus.pompiliusd',
+                    DBUS_NAME,
+                    DBUS_PATH,
+                    DBUS_IFACE,
                     'CacheDirectory',
                     GLib.Variant('(s)', (abs_path,)),
                     None,
