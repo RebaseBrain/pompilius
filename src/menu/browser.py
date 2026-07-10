@@ -1,11 +1,11 @@
 import gi
 import webbrowser
 import os
-import json
 from gi.repository import Nautilus, GObject, Gio, GLib, Notify
 from urllib.parse import unquote, urlparse
 from pompilius import get_existing_profiles
 from constants import DBUS_NAME, DBUS_PATH, DBUS_IFACE
+from errors import CloudError
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Notify", "0.7")
@@ -96,14 +96,22 @@ class PompiliusOpenInBrowser(GObject.GObject, Nautilus.MenuProvider):
                     None,
                 )
             except Exception as e:
-                print(f"Ошибка D-Bus: {e}")
+                print(f"[Browser] ERROR: Ошибка D-Bus при запросе ссылки: {e}")
 
     def on_link_received(self, connection, res, user_data):
         try:
             result = connection.call_finish(res)
-            raw_data = result.unpack()[0]
-            parsed_json = json.loads(raw_data)
-            link = json.loads(parsed_json["data"])
+            link = result.unpack()[0]
             open_link(link)
+        except GLib.Error as e:
+            dbus_err = Gio.dbus_error_get_remote_error(e)
+            if dbus_err == CloudError.REQWEST:
+                GLib.idle_add(
+                    self.show_notification, "Ошибка", "Нет связи с rclone API"
+                )
+            elif dbus_err == CloudError.RCLONE:
+                GLib.idle_add(self.show_notification, "Ошибка облака", e.message)
+            else:
+                GLib.idle_add(self.show_notification, "Ошибка D-Bus", e.message)
         except Exception as e:
-            print(f"Ошибка при открытии ссылки: {e}")
+            print(f"[Browser] ERROR: Ошибка при открытии ссылки: {e}")
