@@ -7,7 +7,7 @@ from pompilius import get_existing_profiles
 from constants import DBUS_NAME, DBUS_PATH, DBUS_IFACE
 from errors import CloudError
 
-REFRESH_INTERVAL_SEC = 60
+REFRESH_INTERVAL_SEC = 120
 
 # Кэш: { profile_name: timestamp последнего обновления }
 LAST_REFRESH_TIME = {}
@@ -85,6 +85,32 @@ class PompiliusRefreshOverlay(GObject.GObject, Nautilus.InfoProvider):
         LAST_REFRESH_TIME[profile] = time.time()
 
         try:
+            bus.call(
+                DBUS_NAME,
+                DBUS_PATH,
+                DBUS_IFACE,
+                "IsBusy",
+                None,
+                None,
+                Gio.DBusCallFlags.NONE,
+                -1,
+                None,
+                self.on_is_busy_done,
+                profile,
+            )
+        except Exception as e:
+            print(f"[Auto-Refresh] ERROR: Ошибка при запуске IsBusy для {profile}: {e}")
+            PENDING_REFRESHES.discard(profile)
+
+    def on_is_busy_done(self, connection, res, profile):
+        try:
+            result = connection.call_finish(res)
+            is_busy = result.unpack()[0]
+            if is_busy:
+                print(f"[Auto-Refresh] INFO: rclone занят, пропускаем Refresh для {profile}")
+                PENDING_REFRESHES.discard(profile)
+                return
+
             # Вызываем Refresh от корня хранилища, чтобы добавить все новые
             # файлы из всех дочерних директорий
             bus.call(
@@ -100,8 +126,11 @@ class PompiliusRefreshOverlay(GObject.GObject, Nautilus.InfoProvider):
                 self.on_refresh_done,
                 profile,
             )
+        except GLib.Error as e:
+            print(f"[Auto-Refresh] ERROR: D-Bus ошибка IsBusy ({profile}): {e.message}")
+            PENDING_REFRESHES.discard(profile)
         except Exception as e:
-            print(f"[Auto-Refresh] ERROR: Ошибка при запуске Refresh для {profile}: {e}")
+            print(f"[Auto-Refresh] ERROR: Непредвиденная ошибка IsBusy ({profile}): {e}")
             PENDING_REFRESHES.discard(profile)
 
     def on_refresh_done(self, connection, res, profile):
