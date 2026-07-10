@@ -4,7 +4,7 @@ import os
 from pompilius import get_existing_profiles
 from constants import DBUS_NAME, DBUS_PATH, DBUS_IFACE
 from urllib.parse import unquote, urlparse
-import json
+from errors import CloudError
 
 gi.require_version("Gtk", "4.0")
 
@@ -115,15 +115,15 @@ class PompiliusIconOverlay(GObject.GObject, Nautilus.InfoProvider):
                 (profile, directory),
             )
         except Exception as e:
-            print(f"Ошибка при запросе статусов: {e}")
+            print(f"[Status] ERROR: Ошибка при запуске запроса статусов: {e}")
             PENDING_DIRS.discard((profile, directory))
 
     def on_status_received(self, connection, res, user_data):
         profile, directory = user_data
         try:
             raw_response = connection.call_finish(res)
-            outer_data = json.loads(raw_response.unpack()[0])
-            status_map = json.loads(outer_data.get("data", "{}"))
+            # D-Bus автоматически преобразует HashMap<String, String> в Python dict
+            status_map = raw_response.unpack()[0]
 
             for f_name, status in status_map.items():
                 STATUS_CACHE[(profile, f_name)] = status
@@ -137,7 +137,15 @@ class PompiliusIconOverlay(GObject.GObject, Nautilus.InfoProvider):
                     except:
                         self.active_files.pop(uri, None)
 
+        except GLib.Error as e:
+            dbus_err = Gio.dbus_error_get_remote_error(e)
+            if dbus_err == CloudError.REQWEST:
+                print(f"[Status] WARNING: Нет связи с API rclone для {profile}.")
+            elif dbus_err == CloudError.PARSE:
+                print(f"[Status] ERROR: Ошибка парсинга статусов для {profile}.")
+            else:
+                print(f"[Status] ERROR: Ошибка D-Bus ({profile}): {e.message}")
         except Exception as e:
-            print(f"Ошибка в on_status_received: {e}")
+            print(f"[Status] ERROR: Непредвиденная ошибка в on_status_received: {e}")
         finally:
             PENDING_DIRS.discard((profile, directory))

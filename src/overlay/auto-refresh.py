@@ -5,8 +5,9 @@ from urllib.parse import unquote, urlparse
 
 from pompilius import get_existing_profiles
 from constants import DBUS_NAME, DBUS_PATH, DBUS_IFACE
+from errors import CloudError
 
-REFRESH_INTERVAL_SEC = 60
+REFRESH_INTERVAL_SEC = 120
 
 # Кэш: { profile_name: timestamp последнего обновления }
 LAST_REFRESH_TIME = {}
@@ -84,6 +85,32 @@ class PompiliusRefreshOverlay(GObject.GObject, Nautilus.InfoProvider):
         LAST_REFRESH_TIME[profile] = time.time()
 
         try:
+            bus.call(
+                DBUS_NAME,
+                DBUS_PATH,
+                DBUS_IFACE,
+                "IsBusy",
+                None,
+                None,
+                Gio.DBusCallFlags.NONE,
+                -1,
+                None,
+                self.on_is_busy_done,
+                profile,
+            )
+        except Exception as e:
+            print(f"[Auto-Refresh] ERROR: Ошибка при запуске IsBusy для {profile}: {e}")
+            PENDING_REFRESHES.discard(profile)
+
+    def on_is_busy_done(self, connection, res, profile):
+        try:
+            result = connection.call_finish(res)
+            is_busy = result.unpack()[0]
+            if is_busy:
+                print(f"[Auto-Refresh] INFO: rclone занят, пропускаем Refresh для {profile}")
+                PENDING_REFRESHES.discard(profile)
+                return
+
             # Вызываем Refresh от корня хранилища, чтобы добавить все новые
             # файлы из всех дочерних директорий
             bus.call(
@@ -99,17 +126,29 @@ class PompiliusRefreshOverlay(GObject.GObject, Nautilus.InfoProvider):
                 self.on_refresh_done,
                 profile,
             )
+        except GLib.Error as e:
+            print(f"[Auto-Refresh] ERROR: D-Bus ошибка IsBusy ({profile}): {e.message}")
+            PENDING_REFRESHES.discard(profile)
         except Exception as e:
-            print(f"Ошибка при вызове Refresh для {profile}: {e}")
+            print(f"[Auto-Refresh] ERROR: Непредвиденная ошибка IsBusy ({profile}): {e}")
             PENDING_REFRESHES.discard(profile)
 
     def on_refresh_done(self, connection, res, profile):
         try:
             # Не нужно парсить ответ демона, достаточно того, что ошибок нет.
             _ = connection.call_finish(res)
-            print(f"Обновил хранилище: {profile}")
+            print(f"[Auto-Refresh] INFO: Обновил хранилище: {profile}")
+        except GLib.Error as e:
+            dbus_err = Gio.dbus_error_get_remote_error(e)
+
+            if dbus_err == CloudError.REQWEST:
+                print(f"[Auto-Refresh] WARINNING: Нет связи с API rclone при обновлении {profile}.")
+            elif dbus_err == CloudError.RCLONE:
+                print(f"[Auto-Refresh] ERROR: Ошибка облака ({profile}): {e.message}")
+            else:
+                print(f"[Auto-Refresh] ERROR: D-Bus ошибка ({profile}): {e.message}")
         except Exception as e:
-            print(f"D-Bus Refresh вернул ошибку для {profile}: {e}")
+            print(f"[Auto-Refresh] ERROR: Непредвиденная ошибка ({profile}): {e}")
         finally:
             # Снимаем блокировку запроса
             PENDING_REFRESHES.discard(profile)

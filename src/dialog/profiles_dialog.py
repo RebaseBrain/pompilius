@@ -1,7 +1,7 @@
 import gi
 from gi.repository import Gtk, Gio, GLib
-import json
 from constants import DBUS_NAME, DBUS_PATH, DBUS_IFACE
+from errors import CloudError
 from pompilius import (
     Provider,
     Profile,
@@ -109,10 +109,7 @@ class ProfilesDialog(Gtk.Window):
 
     def on_profiles_loaded(self, connection, res, user_data):
         try:
-            response_raw = connection.call_finish(res)
-            raw_json = response_raw.unpack()[0]
-            response = json.loads(raw_json)
-            profiles_raw = json.loads(response["data"])
+            profiles_raw = connection.call_finish(res).unpack()[0]
 
             # Очистка
             while True:
@@ -134,11 +131,18 @@ class ProfilesDialog(Gtk.Window):
 
             self.list_box.invalidate_filter()
             self.list_box.invalidate_sort()
+        except GLib.Error as e:
+            dbus_err = Gio.dbus_error_get_remote_error(e)
+            if dbus_err == CloudError.REQWEST:
+                self.parent_ext.show_error_dialog(
+                    self, "Ошибка сети", "Нет связи с API rclone"
+                )
+            else:
+                self.parent_ext.show_error_dialog(self, "Ошибка D-Bus", e.message)
         except Exception as e:
-            print(f"Ошибка при загрузке профилей: {e}")
+            print(f"[ProfilesDialog] ERROR: Ошибка при загрузке профилей: {e}")
 
     def delete_profile_handler(self, button, profile_title, row):
-        # Сразу убираем из UI (оптимистичное удаление)
         self.list_box.remove(row)
 
         # Вызываем D-Bus
@@ -159,9 +163,22 @@ class ProfilesDialog(Gtk.Window):
     def on_profile_deleted(self, connection, res, profile_title):
         try:
             connection.call_finish(res)
-            print(f"Профиль {profile_title} успешно удален")
+            print(f"[ProfilesDialog] INFO: Профиль {profile_title} успешно удален")
+        except GLib.Error as e:
+            dbus_err = Gio.dbus_error_get_remote_error(e)
+            if dbus_err == CloudError.REQWEST:
+                self.parent_ext.show_error_dialog(
+                    self,
+                    "Ошибка сети",
+                    f"Не удалось удалить {profile_title}: нет связи с rclone API",
+                )
+            else:
+                self.parent_ext.show_error_dialog(self, "Ошибка удаления", e.message)
+            self.load_profiles()
         except Exception as e:
-            print(f"Ошибка при удалении {profile_title}: {e}. Перезагружаем список.")
+            print(
+                f"[ProfilesDialog] ERROR: Ошибка при удалении {profile_title}: {e}. Перезагружаем список."
+            )
             # В случае ошибки перезагружаем список полностью
             self.load_profiles()
 

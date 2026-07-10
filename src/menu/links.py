@@ -1,10 +1,10 @@
 import gi
 from gi.repository import Nautilus, GObject, Gio, GLib, Gdk, Notify
-import json
 from urllib.parse import unquote, urlparse
 import os
 from constants import DBUS_NAME, DBUS_PATH, DBUS_IFACE
 from pompilius import get_existing_profiles
+from errors import CloudError
 
 gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk", "4.0")
@@ -94,19 +94,31 @@ class PompiliusLinks(GObject.GObject, Nautilus.MenuProvider):
                     None,
                 )
             except Exception as e:
-                print(f"Ошибка D-Bus: {e}")
+                print(f"[Links] ERROR: Ошибка D-Bus при запросе ссылки: {e}")
 
     def on_link_received(self, connection, res, user_data):
         try:
             result = connection.call_finish(res)
-            raw_data = result.unpack()[0]
-            parsed_json = json.loads(raw_data)
-            link = json.loads(parsed_json["data"])
+            link = result.unpack()[0]
 
             display = Gdk.Display.get_default()
             clipboard = display.get_clipboard()
             clipboard.set_content(Gdk.ContentProvider.new_for_value(link))
 
-            GLib.idle_add(self.show_notification, "Pompilius", "Ссылка скопирована!")
+            GLib.idle_add(
+                self.show_notification,
+                "Pompilius",
+                "Ссылка скопирована в буфер обмена!",
+            )
+        except GLib.Error as e:
+            dbus_err = Gio.dbus_error_get_remote_error(e)
+            if dbus_err == CloudError.REQWEST:
+                GLib.idle_add(
+                    self.show_notification, "Ошибка", "Нет связи с rclone API"
+                )
+            elif dbus_err == CloudError.RCLONE:
+                GLib.idle_add(self.show_notification, "Ошибка облака", e.message)
+            else:
+                GLib.idle_add(self.show_notification, "Ошибка D-Bus", e.message)
         except Exception as e:
-            print(f"Ошибка при получении ссылки: {e}")
+            print(f"[Links] ERROR: Непредвиденная ошибка при получении ссылки: {e}")
