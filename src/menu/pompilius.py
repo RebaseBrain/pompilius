@@ -2,9 +2,9 @@ import gi
 from gi.repository import Nautilus, GObject, Gtk, Pango, Gio, GLib
 import tomllib
 import os
-import json
 from urllib.parse import unquote, urlparse
 
+from errors import CloudError
 from constants import (
     DBUS_IFACE,
     DBUS_NAME,
@@ -61,11 +61,17 @@ def get_available_providers():
             -1,
             None,
         )
-        raw_json = response_raw.unpack()[0]
-        data = json.loads(raw_json)
-        return json.loads(data.get("data", "[]"))
+        # Получаем список названий провайдеров от демона
+        providers = response_raw.unpack()[0]
+        return providers
+    except GLib.Error as e:
+        dbus_err = Gio.dbus_error_get_remote_error(e)
+        print(
+            f"[Pompilius] WARNING: D-Bus ошибка при получении провайдеров ({dbus_err}): {e.message}"
+        )
+        return ["drive", "yandex", "mailru", "webdav"]  # Fallback
     except Exception as e:
-        print(f"Ошибка при получении списка провайдеров: {e}")
+        print(f"[Pompilius] ERROR: Ошибка при получении списка провайдеров: {e}")
         return ["drive", "yandex", "mailru", "webdav"]  # Fallback
 
 
@@ -232,9 +238,15 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
     def on_profile_deleted(self, connection, res, user_data):
         try:
             connection.call_finish(res)
-            self.load_profiles()
+            # В ColumnExtension нет self.load_profiles(), метод вызывается только если это резервный путь
+            print(f"[Pompilius] INFO: Профиль удален (fallback-обработчик).")
+        except GLib.Error as e:
+            dbus_err = Gio.dbus_error_get_remote_error(e)
+            print(
+                f"[Pompilius] ERROR: Ошибка D-Bus при удалении профиля ({dbus_err}): {e.message}"
+            )
         except Exception as e:
-            print(f"Ошибка при удалении профиля: {e}")
+            print(f"[Pompilius] ERROR: Ошибка при удалении профиля: {e}")
 
     def show_profiles(self):
         from profiles_dialog import ProfilesDialog
@@ -299,7 +311,7 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
         except Exception as e:
             button.set_sensitive(True)
             button.set_label("Подключить")
-            self.show_error_dialog(current_dialog, "Ошибка монтирования", str(e))
+            self.show_error_dialog(current_dialog, "Системная ошибка D-Bus", str(e))
 
     def on_mount_finished(self, connection, res, user_data):
         current_dialog, button = user_data
@@ -309,7 +321,30 @@ class ColumnExtension(GObject.GObject, Nautilus.MenuProvider):
             if self.dialog:
                 self.dialog.destroy()
                 self.dialog = None
+        except GLib.Error as e:
+            button.set_sensitive(True)
+            button.set_label("Подключить")
+            dbus_err = Gio.dbus_error_get_remote_error(e)
+
+            if dbus_err == CloudError.REQWEST:
+                self.show_error_dialog(
+                    current_dialog, "Ошибка сети", "Нет связи с API rclone"
+                )
+            elif dbus_err == CloudError.CONVERT:
+                self.show_error_dialog(
+                    current_dialog,
+                    "Ошибка параметров",
+                    "Убедитесь, что размер и время жизни кеша указаны целыми числами",
+                )
+            elif dbus_err == CloudError.RCLONE:
+                self.show_error_dialog(current_dialog, "Ошибка монтирования", e.message)
+            elif dbus_err == CloudError.IO:
+                self.show_error_dialog(
+                    current_dialog, "Ошибка файловой системы", e.message
+                )
+            else:
+                self.show_error_dialog(current_dialog, "Ошибка D-Bus", e.message)
         except Exception as e:
             button.set_sensitive(True)
             button.set_label("Подключить")
-            self.show_error_dialog(current_dialog, "Ошибка монтирования", str(e))
+            self.show_error_dialog(current_dialog, "Непредвиденная ошибка", str(e))
