@@ -5,6 +5,7 @@ from urllib.parse import unquote, urlparse
 
 from pompilius import get_existing_profiles
 from constants import DBUS_NAME, DBUS_PATH, DBUS_IFACE
+from errors import CloudError
 
 REFRESH_INTERVAL_SEC = 60
 
@@ -100,16 +101,25 @@ class PompiliusRefreshOverlay(GObject.GObject, Nautilus.InfoProvider):
                 profile,
             )
         except Exception as e:
-            print(f"Ошибка при вызове Refresh для {profile}: {e}")
+            print(f"[Auto-Refresh] ERROR: Ошибка при запуске Refresh для {profile}: {e}")
             PENDING_REFRESHES.discard(profile)
 
     def on_refresh_done(self, connection, res, profile):
         try:
             # Не нужно парсить ответ демона, достаточно того, что ошибок нет.
             _ = connection.call_finish(res)
-            print(f"Обновил хранилище: {profile}")
+            print(f"[Auto-Refresh] INFO: Обновил хранилище: {profile}")
+        except GLib.Error as e:
+            dbus_err = Gio.dbus_error_get_remote_error(e)
+
+            if dbus_err == CloudError.REQWEST:
+                print(f"[Auto-Refresh] WARINNING: Нет связи с API rclone при обновлении {profile}.")
+            elif dbus_err == CloudError.RCLONE:
+                print(f"[Auto-Refresh] ERROR: Ошибка облака ({profile}): {e.message}")
+            else:
+                print(f"[Auto-Refresh] ERROR: D-Bus ошибка ({profile}): {e.message}")
         except Exception as e:
-            print(f"D-Bus Refresh вернул ошибку для {profile}: {e}")
+            print(f"[Auto-Refresh] ERROR: Непредвиденная ошибка ({profile}): {e}")
         finally:
             # Снимаем блокировку запроса
             PENDING_REFRESHES.discard(profile)
