@@ -13,6 +13,7 @@ from pompilius import (
     bus,
     get_existing_profiles,
 )
+from errors import CloudError
 import json
 
 gi.require_version("Gtk", "4.0")
@@ -141,10 +142,8 @@ class AddProfileDialog(Gtk.Window):
 
     def on_options_received(self, connection, res, user_data):
         try:
-            raw_response = connection.call_finish(res)
-            raw_json = raw_response.unpack()[0]
-            response = json.loads(raw_json)
-            temp_list = json.loads(response["data"])
+            temp_list_raw = connection.call_finish(res).unpack()[0]
+            temp_list = [json.loads(item) for item in temp_list_raw]
 
             while True:
                 child = self.options_box.get_first_child()
@@ -163,6 +162,16 @@ class AddProfileDialog(Gtk.Window):
                 self.options_box.append(entry)
                 self.entries_map[name] = entry
 
+        except GLib.Error as e:
+            dbus_err = Gio.dbus_error_get_remote_error(e)
+            if dbus_err == CloudError.REQWEST:
+                self.parent_ext.show_error_dialog(
+                    self, "Ошибка сети", "Нет связи с API rclone"
+                )
+            elif dbus_err == CloudError.RCLONE:
+                self.parent_ext.show_error_dialog(self, "Ошибка провайдера", e.message)
+            else:
+                self.parent_ext.show_error_dialog(self, "Ошибка D-Bus", e.message)
         except Exception as e:
             print(f"Ошибка получения опций: {e}")
 
@@ -208,7 +217,7 @@ class AddProfileDialog(Gtk.Window):
         except Exception as e:
             self.btn_create.set_sensitive(True)
             self.btn_create.set_label("Создать и привязать")
-            self.parent_ext.show_error_dialog(self, "Ошибка D-Bus", str(e))
+            self.parent_ext.show_error_dialog(self, "Системная ошибка D-Bus", str(e))
 
     def on_profile_created(self, connection, res, user_data):
         try:
@@ -216,6 +225,19 @@ class AddProfileDialog(Gtk.Window):
             if self.refresh_callback:
                 self.refresh_callback()
             self.destroy()
+        except GLib.Error as e:
+            self.btn_create.set_sensitive(True)
+            self.btn_create.set_label("Создать и привязать")
+
+            dbus_err = Gio.dbus_error_get_remote_error(e)
+            if dbus_err == CloudError.RCLONE:
+                self.parent_ext.show_error_dialog(self, "Ошибка rclone", e.message)
+            elif dbus_err == CloudError.CONVERT:
+                self.parent_ext.show_error_dialog(
+                    self, "Ошибка параметров", "Неверный формат данных"
+                )
+            else:
+                self.parent_ext.show_error_dialog(self, "Системная ошибка", e.message)
         except Exception as e:
             self.btn_create.set_sensitive(True)
             self.btn_create.set_label("Создать и привязать")
