@@ -1,18 +1,33 @@
 import gi
-from pompilius import get_existing_profiles
-from constants import DBUS_NAME, DBUS_PATH, DBUS_IFACE
 import os
-from gi.repository import Nautilus, GObject, Gio, GLib
+from gi.repository import Nautilus, GObject, Gio, GLib, Notify
 from urllib.parse import unquote, urlparse
 
+from pompilius import get_existing_profiles
+from constants import DBUS_NAME, DBUS_PATH, DBUS_IFACE
+from errors import CloudError
+
 gi.require_version("Gtk", "4.0")
+gi.require_version("Notify", "0.7")
 
 bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
 
 
 class PompiliusCaching(GObject.GObject, Nautilus.MenuProvider):
     def __init__(self):
-        GObject.Object.__init__(self)
+        super().__init__()
+        try:
+            Notify.init("Pompilius")
+        except Exception as e:
+            print(f"[Caching] ERROR: Не удалось инициализировать Notify: {e}")
+
+    def show_notification(self, title, message):
+        try:
+            n = Notify.Notification.new(title, message, "document-save-symbolic")
+            n.set_hint("transient", GLib.Variant("b", True))
+            n.show()
+        except Exception as e:
+            print(f"[Caching] ERROR: Ошибка вывода уведомления GNOME: {e}")
 
     def get_file_items(self, files):
         profiles = get_existing_profiles()
@@ -91,7 +106,7 @@ class PompiliusCaching(GObject.GObject, Nautilus.MenuProvider):
                 )
 
             except Exception as e:
-                print(f"Ошибка D-Bus: {e}")
+                print(f"[Caching] ERROR: Ошибка D-Bus при удалении из кеша: {e}")
 
     def cache_choosed_directory(self, item, directories):
         for file_info in directories:
@@ -118,11 +133,27 @@ class PompiliusCaching(GObject.GObject, Nautilus.MenuProvider):
                     f"Кеширование директории: {abs_path}",
                 )
             except Exception as e:
-                print(f"Ошибка D-Bus при кешировании {abs_path}: {e}")
+                print(f"[Caching] ERROR: Ошибка D-Bus при кешировании {abs_path}: {e}")
 
     def on_operation_finished(self, connection, res, user_data):
         try:
             connection.call_finish(res)
-            print(f"Операция завершена успешно: {user_data}")
+            GLib.idle_add(
+                self.show_notification,
+                "Операция над кэшом проведена успешно!",
+                f"{user_data}",
+            )
+        except GLib.Error as e:
+            dbus_err = Gio.dbus_error_get_remote_error(e)
+            if dbus_err == CloudError.REQWEST:
+                GLib.idle_add(
+                    self.show_notification, "Ошибка сети", "Нет связи с API rclone"
+                )
+            elif dbus_err == CloudError.RCLONE:
+                GLib.idle_add(self.show_notification, "Ошибка rclone", e.message)
+            elif dbus_err == CloudError.IO:
+                GLib.idle_add(self.show_notification, "Ошибка доступа", e.message)
+            else:
+                GLib.idle_add(self.show_notification, "Ошибка D-Bus", e.message)
         except Exception as e:
-            print(f"Ошибка при выполнении операции ({user_data}): {e}")
+            print(f"[Caching] ERROR: Ошибка при выполнении операции ({user_data}): {e}")
